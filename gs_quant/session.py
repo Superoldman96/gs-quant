@@ -323,7 +323,7 @@ class GsSession(ContextBase):
     def __init__(
         self,
         domain: str,
-        environment: str = None,
+        environment: Union[str, Environment] = None,
         api_version: str = API_VERSION,
         application: str = DEFAULT_APPLICATION,
         verify=True,
@@ -339,7 +339,9 @@ class GsSession(ContextBase):
         self._async_api: Optional['_AsyncSessionAPI'] = None
         self.domain = domain
         self._orig_domain = domain
-        if environment in tuple(x.name for x in Environment):
+        if isinstance(environment, Environment):
+            self.environment = environment
+        elif environment in tuple(x.name for x in Environment):
             self.environment = Environment[environment]
         elif isinstance(domain, Environment):
             self.environment = domain

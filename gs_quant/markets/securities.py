@@ -674,6 +674,12 @@ class SecMasterAsset(Asset):
         self.__asset_type = asset_type
         self.__cached_identifiers = None
 
+    def __repr__(self) -> str:
+        return json.dumps(self.entity, indent=2, default=str) if self.entity else super().__repr__()
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
     def get_type(self) -> AssetType:
         return self.__asset_type
 
@@ -694,11 +700,17 @@ class SecMasterAsset(Asset):
         return marquee_id
 
     def get_identifier(self, id_type: Union[AssetIdentifier, SecurityIdentifier], as_of: dt.date = None):
-        # Add an exception since original get_identifier() takes id_type: AssetIdentifier
-        if not isinstance(id_type, SecurityIdentifier):
+        # Accept either AssetIdentifier or SecurityIdentifier; convert AssetIdentifier to its
+        # SecurityIdentifier equivalent so callers don't need to pick the right enum per source.
+        if isinstance(id_type, AssetIdentifier):
+            converted = _ASSET_TO_SECURITY_IDENTIFIER.get(id_type)
+            if converted is None:
+                raise MqTypeError(f"AssetIdentifier {id_type} has no SecurityIdentifier equivalent for SecMasterAsset")
+            id_type = converted
+        elif not isinstance(id_type, SecurityIdentifier):
             raise MqTypeError(
-                f"""Expected id_type: SecurityIdentifier.enum for Assets sourced from SecurityMaster.
-                Received: {id_type}"""
+                f"""Expected id_type: SecurityIdentifier.enum (or AssetIdentifier) for Assets sourced from
+                SecurityMaster. Received: {id_type}"""
             )
         if id_type == SecurityIdentifier.GSID:
             return self.entity['identifiers'].get(SecurityIdentifier.GSID.value)
@@ -859,7 +871,6 @@ class SecMasterAsset(Asset):
                 id_type = temporal_xref['type']
                 xref_dict = {
                     "start_date": dt.datetime.strptime(temporal_xref['startDate'], "%Y-%m-%d").date(),
-                    "update_date": temporal_xref['updateTime'],
                     "value": temporal_xref['value'],
                 }
                 if temporal_xref['endDate'] == "9999-99-99":
@@ -1360,6 +1371,25 @@ class SecurityMasterSource(Enum):
     SECURITY_MASTER = auto()
 
 
+# Bidirectional mapping between AssetIdentifier (Asset Service) and SecurityIdentifier (Security Master)
+# for identifier types that exist in both enums. Used to normalize identifier types so that callers
+# may pass either enum regardless of the configured SecurityMaster source.
+_ASSET_TO_SECURITY_IDENTIFIER: Dict['AssetIdentifier', 'SecurityIdentifier'] = {
+    AssetIdentifier.MARQUEE_ID: SecurityIdentifier.ASSET_ID,
+    AssetIdentifier.REUTERS_ID: SecurityIdentifier.RIC,
+    AssetIdentifier.BLOOMBERG_ID: SecurityIdentifier.BBID,
+    AssetIdentifier.BLOOMBERG_COMPOSITE_ID: SecurityIdentifier.BCID,
+    AssetIdentifier.CUSIP: SecurityIdentifier.CUSIP,
+    AssetIdentifier.ISIN: SecurityIdentifier.ISIN,
+    AssetIdentifier.SEDOL: SecurityIdentifier.SEDOL,
+    AssetIdentifier.TICKER: SecurityIdentifier.TICKER,
+    AssetIdentifier.GSID: SecurityIdentifier.GSID,
+}
+_SECURITY_TO_ASSET_IDENTIFIER: Dict['SecurityIdentifier', 'AssetIdentifier'] = {
+    v: k for k, v in _ASSET_TO_SECURITY_IDENTIFIER.items()
+}
+
+
 class Security:
     def __init__(self, json: dict):
         for k, v in json.items():
@@ -1547,6 +1577,41 @@ class SecurityMaster:
         cls._source = source
 
     @classmethod
+    def _normalize_identifier(
+        cls, id_type: Union[AssetIdentifier, SecurityIdentifier, str]
+    ) -> Union[AssetIdentifier, SecurityIdentifier]:
+        """Normalize ``id_type`` to the enum expected by the configured ``_source``.
+
+        Accepts an :class:`AssetIdentifier`, a :class:`SecurityIdentifier`, or a string
+        (matched against enum names or values, case-insensitively). Converts between the
+        two enums where an equivalent exists so that callers may pass either kind
+        regardless of whether the source is Asset Service or Security Master.
+        """
+        target_enum = SecurityIdentifier if cls._source == SecurityMasterSource.SECURITY_MASTER else AssetIdentifier
+        cross_map = (
+            _ASSET_TO_SECURITY_IDENTIFIER if target_enum is SecurityIdentifier else _SECURITY_TO_ASSET_IDENTIFIER
+        )
+
+        if isinstance(id_type, target_enum):
+            return id_type
+        if isinstance(id_type, (AssetIdentifier, SecurityIdentifier)):
+            converted = cross_map.get(id_type)
+            if converted is None:
+                raise MqTypeError(f"Identifier {id_type} has no equivalent for source {cls._source.name}")
+            return converted
+        if isinstance(id_type, str):
+            # Try matching enum member name (e.g. "TICKER") then value (e.g. "ticker", "BBID").
+            try:
+                return target_enum[id_type.upper()]
+            except KeyError:
+                pass
+            for member in target_enum:
+                if member.value.lower() == id_type.lower():
+                    return member
+            raise MqTypeError(f"Unknown identifier: {id_type!r}")
+        raise MqTypeError(f"Expected AssetIdentifier, SecurityIdentifier or str, got {type(id_type).__name__}")
+
+    @classmethod
     def get_asset_query(
         cls,
         id_value: Union[str, List[str]],
@@ -1637,9 +1702,8 @@ class SecurityMaster:
         :func:`get_many_assets`
 
         """
+        id_type = cls._normalize_identifier(id_type)
         if cls._source == SecurityMasterSource.SECURITY_MASTER:
-            if not isinstance(id_type, SecurityIdentifier):
-                raise MqTypeError('expected a security identifier')
             if exchange_code or asset_type:
                 raise NotImplementedError('argument not implemented for Security Master (supported in Asset Service)')
             return cls._get_security_master_asset(id_value, id_type, as_of=as_of, fields=fields)
@@ -1704,9 +1768,8 @@ class SecurityMaster:
         :func:`get_many_assets`
 
         """
+        id_type = cls._normalize_identifier(id_type)
         if cls._source == SecurityMasterSource.SECURITY_MASTER:
-            if not isinstance(id_type, SecurityIdentifier):
-                raise MqTypeError('expected a security identifier')
             if exchange_code or asset_type:
                 raise NotImplementedError('argument not implemented for Security Master (supported in Asset Service)')
             return await cls._get_security_master_asset_async(id_value, id_type, as_of=as_of, fields=fields)
@@ -1727,7 +1790,7 @@ class SecurityMaster:
     def get_many_assets(
         cls,
         id_values: List[str],
-        id_type: AssetIdentifier,
+        id_type: Union[AssetIdentifier, SecurityIdentifier],
         limit: int = 100,
         as_of: Union[dt.date, dt.datetime] = None,
         exchange_code: ExchangeCode = None,
@@ -1772,6 +1835,7 @@ class SecurityMaster:
         span = Tracer.active_span()
         tracer = Tracer('SecurityMaster.get_many_assets') if span and span.is_recording() else nullcontext()
         with tracer as scope:
+            id_type = cls._normalize_identifier(id_type)
             if scope and scope.span:
                 scope.span.set_tag(f'request.ids.{id_type.value}', len(id_values) if id_values else 0)
             query, as_of = cls.get_asset_query(id_values, id_type, as_of, exchange_code)
@@ -1785,7 +1849,7 @@ class SecurityMaster:
     async def get_many_assets_async(
         cls,
         id_values: List[str],
-        id_type: AssetIdentifier,
+        id_type: Union[AssetIdentifier, SecurityIdentifier],
         limit: int = 100,
         as_of: Union[dt.date, dt.datetime] = None,
         exchange_code: ExchangeCode = None,
@@ -1832,6 +1896,7 @@ class SecurityMaster:
         span = Tracer.active_span()
         tracer = Tracer('SecurityMaster.get_many_assets_async') if span and span.is_recording() else nullcontext()
         with tracer as scope:
+            id_type = cls._normalize_identifier(id_type)
             if scope and scope.span:
                 scope.span.set_tag(f'request.ids.{id_type.value}', len(id_values) if id_values else 0)
             query, as_of = cls.get_asset_query(id_values, id_type, as_of, exchange_code)
@@ -1849,12 +1914,12 @@ class SecurityMaster:
         as_of: Union[dt.date, dt.datetime] = None,
         fields: Optional[List[str]] = None,
     ) -> dict:
-        as_of = as_of or dt.datetime(2100, 1, 1)
         type_ = id_type.value
-        params = {
-            type_: id_value,
-            'asOfDate': as_of.strftime('%Y-%m-%d'),  # TODO: update endpoint to take times
-        }
+        params = {type_: id_value}
+        if as_of is not None:
+            # Security Master endpoint expects ``effectiveDate`` as a date (YYYY-MM-DD).
+            effective_date = as_of.date() if isinstance(as_of, dt.datetime) else as_of
+            params['effectiveDate'] = effective_date.strftime('%Y-%m-%d')
         if fields is not None:
             request_fields = {'identifiers', 'assetClass', 'type', 'currency', 'exchange', 'id'}
             request_fields.update(fields)

@@ -1513,7 +1513,7 @@ def mock_commodity_forecast(_cls, _q, ignore_errors=False):
 
 def mock_commodity_forecast_time_series(_cls, _q, ignore_errors=False):
     d = {
-        'forecastFrequency': ['Annual', 'Monthly', 'Quarterly', '3/6/12-Month Rolling'],
+        'forecastPeriod': ['2027', '2027M01', '2027Q1', '3m'],
         'forecastType': ['spot', 'spot', 'spot', 'spot'],
         'commodityForecast': [56, 63, 77.75, 80],
     }

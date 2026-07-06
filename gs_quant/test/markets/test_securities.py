@@ -1043,8 +1043,13 @@ def test_secmaster_get_asset_no_asset_id_response_should_fail(mocker):
 
 def test_secmaster_get_asset_returning_secmasterassets(mocker):
     def assert_asset_common(asset: Asset) -> None:
+        # AssetIdentifier with a SecurityIdentifier equivalent should resolve to the same value.
+        assert asset.get_identifier(id_type=AssetIdentifier.BLOOMBERG_ID) == asset.get_identifier(
+            id_type=SecurityIdentifier.BBID
+        )
+        # AssetIdentifier values without a SecurityIdentifier equivalent should still raise.
         with pytest.raises(MqTypeError):
-            asset.get_identifier(id_type=AssetIdentifier.BLOOMBERG_ID)
+            asset.get_identifier(id_type=AssetIdentifier.PLOT_ID)
 
     # get_asset() should return Stock instance when type: Common Stock
     mock_equity_response = {
@@ -1577,6 +1582,359 @@ def test_map_identifiers_asset_service_exceptions():
         # unsupported output type
         with AssetContext():
             SecurityMaster.map_identifiers(SecurityIdentifier.BBID, ['GS UN', 'AAPL UN'], [SecurityIdentifier.BBG])
+
+
+# ---------------------------------------------------------------------------
+# Tests for unified identifier normalization (_normalize_identifier) and
+# related behaviour added so callers can pass either AssetIdentifier,
+# SecurityIdentifier, or a string regardless of the configured source.
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_identifier_asset_service_passthrough():
+    with AssetContext():
+        assert SecurityMaster._normalize_identifier(AssetIdentifier.TICKER) is AssetIdentifier.TICKER
+        assert SecurityMaster._normalize_identifier(AssetIdentifier.MARQUEE_ID) is AssetIdentifier.MARQUEE_ID
+
+
+def test_normalize_identifier_security_master_passthrough():
+    with SecMasterContext():
+        assert SecurityMaster._normalize_identifier(SecurityIdentifier.TICKER) is SecurityIdentifier.TICKER
+        assert SecurityMaster._normalize_identifier(SecurityIdentifier.ASSET_ID) is SecurityIdentifier.ASSET_ID
+
+
+def test_normalize_identifier_cross_conversion_asset_service():
+    # SecurityIdentifier should be converted to its AssetIdentifier equivalent.
+    with AssetContext():
+        assert SecurityMaster._normalize_identifier(SecurityIdentifier.BBID) is AssetIdentifier.BLOOMBERG_ID
+        assert SecurityMaster._normalize_identifier(SecurityIdentifier.RIC) is AssetIdentifier.REUTERS_ID
+        assert SecurityMaster._normalize_identifier(SecurityIdentifier.ASSET_ID) is AssetIdentifier.MARQUEE_ID
+        assert SecurityMaster._normalize_identifier(SecurityIdentifier.TICKER) is AssetIdentifier.TICKER
+
+
+def test_normalize_identifier_cross_conversion_security_master():
+    # AssetIdentifier should be converted to its SecurityIdentifier equivalent.
+    with SecMasterContext():
+        assert SecurityMaster._normalize_identifier(AssetIdentifier.BLOOMBERG_ID) is SecurityIdentifier.BBID
+        assert SecurityMaster._normalize_identifier(AssetIdentifier.REUTERS_ID) is SecurityIdentifier.RIC
+        assert SecurityMaster._normalize_identifier(AssetIdentifier.MARQUEE_ID) is SecurityIdentifier.ASSET_ID
+        assert SecurityMaster._normalize_identifier(AssetIdentifier.TICKER) is SecurityIdentifier.TICKER
+
+
+def test_normalize_identifier_string_inputs():
+    with AssetContext():
+        assert SecurityMaster._normalize_identifier("TICKER") is AssetIdentifier.TICKER
+        assert SecurityMaster._normalize_identifier("ticker") is AssetIdentifier.TICKER
+        # match by enum value
+        assert SecurityMaster._normalize_identifier("BBID") is AssetIdentifier.BLOOMBERG_ID
+    with SecMasterContext():
+        assert SecurityMaster._normalize_identifier("TICKER") is SecurityIdentifier.TICKER
+        assert SecurityMaster._normalize_identifier("assetId") is SecurityIdentifier.ASSET_ID
+
+
+def test_normalize_identifier_unknown_string_raises():
+    with AssetContext():
+        with pytest.raises(MqTypeError):
+            SecurityMaster._normalize_identifier("NOT_A_REAL_IDENTIFIER")
+
+
+def test_normalize_identifier_no_equivalent_raises():
+    # SecurityIdentifier.BBG has no AssetIdentifier counterpart.
+    with AssetContext():
+        with pytest.raises(MqTypeError):
+            SecurityMaster._normalize_identifier(SecurityIdentifier.BBG)
+    # AssetIdentifier.PLOT_ID has no SecurityIdentifier counterpart.
+    with SecMasterContext():
+        with pytest.raises(MqTypeError):
+            SecurityMaster._normalize_identifier(AssetIdentifier.PLOT_ID)
+
+
+def test_normalize_identifier_invalid_type_raises():
+    with AssetContext():
+        with pytest.raises(MqTypeError):
+            SecurityMaster._normalize_identifier(42)
+
+
+def test_get_asset_accepts_security_identifier_on_asset_service(mocker):
+    """A SecurityIdentifier passed to get_asset under ASSET_SERVICE should be converted."""
+    mock_response = GsAsset(asset_class=AssetClass.Equity, type_=GsAssetType.Single_Stock, name='Test Asset')
+    mocker.patch.object(
+        GsSession.__class__, 'default_value', return_value=GsSession.get(Environment.QA, 'client_id', 'secret')
+    )
+    # MARQUEE_ID short-circuits to GsAssetApi.get_asset which calls sync.get
+    mocker.patch.object(GsSession.current.sync, 'get', return_value=mock_response)
+    with AssetContext():
+        # SecurityIdentifier.ASSET_ID maps to AssetIdentifier.MARQUEE_ID -> uses get_asset by mqid path.
+        asset = SecurityMaster.get_asset('MA1234567890', SecurityIdentifier.ASSET_ID)
+    assert asset.name == 'Test Asset'
+
+
+def test_get_asset_accepts_asset_identifier_on_security_master(mocker):
+    """An AssetIdentifier passed to get_asset under SECURITY_MASTER should be converted."""
+    mock_response = {
+        "results": [
+            {
+                "name": "GOLDMAN SACHS GROUP INC (New York Stock)",
+                "type": "Common Stock",
+                "currency": "USD",
+                "assetClass": "Equity",
+                "identifiers": {"bbid": "GS UN", "assetId": "MA4B66MW5E27UAHKG34", "gsid": 901026},
+                "exchange": {"name": "New York Stock", "identifiers": {"gsExchangeId": 154}},
+                "id": "GSPD901026E154",
+            }
+        ],
+        "totalResults": 1,
+    }
+    mocker.patch.object(
+        GsSession.__class__, 'default_value', return_value=GsSession.get(Environment.QA, 'client_id', 'secret')
+    )
+    captured = {}
+
+    def fake_get(url, payload=None, **kwargs):
+        captured['url'] = url
+        captured['payload'] = payload
+        return mock_response
+
+    mocker.patch.object(GsSession.current.sync, 'get', side_effect=fake_get)
+    with SecMasterContext():
+        # AssetIdentifier.BLOOMBERG_ID should be converted to SecurityIdentifier.BBID ("bbid").
+        asset = SecurityMaster.get_asset('GS UN', AssetIdentifier.BLOOMBERG_ID)
+    assert isinstance(asset, SecMasterAsset)
+    assert 'bbid' in captured['payload']
+    assert captured['payload']['bbid'] == 'GS UN'
+
+
+def test_get_asset_accepts_string_identifier(mocker):
+    mock_response = GsAsset(asset_class=AssetClass.Equity, type_=GsAssetType.Single_Stock, name='Test Asset')
+    mocker.patch.object(
+        GsSession.__class__, 'default_value', return_value=GsSession.get(Environment.QA, 'client_id', 'secret')
+    )
+    mocker.patch.object(GsSession.current.sync, 'get', return_value=mock_response)
+    with AssetContext():
+        asset = SecurityMaster.get_asset('MA1234567890', 'MARQUEE_ID')
+    assert asset.name == 'Test Asset'
+
+
+# ---------------------------------------------------------------------------
+# Tests for SecMasterAsset.get_identifier accepting either enum.
+# ---------------------------------------------------------------------------
+
+
+def _make_secmaster_asset_for_id_tests(mocker):
+    mock_equity_response = {
+        "results": [
+            {
+                "name": "GOLDMAN SACHS GROUP INC (New York Stock)",
+                "type": "Common Stock",
+                "currency": "USD",
+                "assetClass": "Equity",
+                "identifiers": {
+                    "gsid": 901026,
+                    "bbid": "GS UN",
+                    "ticker": "GS",
+                    "ric": "GS.N",
+                    "isin": "US38141G1040",
+                    "assetId": "MA4B66MW5E27UAHKG34",
+                },
+                "exchange": {"name": "New York Stock", "identifiers": {"gsExchangeId": 154}},
+                "id": "GSPD901026E154",
+            }
+        ],
+        "totalResults": 1,
+    }
+    mock_id_history = {
+        "results": [
+            {
+                "startDate": "2007-01-01",
+                "endDate": "9999-99-99",
+                "value": "GS UN",
+                "updateTime": "2002-02-09T17:58:27.58Z",
+                "type": "bbid",
+            },
+            {
+                "startDate": "2007-01-01",
+                "endDate": "9999-99-99",
+                "value": "GS",
+                "updateTime": "2002-02-09T17:58:27.58Z",
+                "type": "ticker",
+            },
+            {
+                "startDate": "2007-01-01",
+                "endDate": "9999-99-99",
+                "value": "GS.N",
+                "updateTime": "2002-02-09T17:58:27.58Z",
+                "type": "ric",
+            },
+            {
+                "startDate": "2007-01-01",
+                "endDate": "9999-99-99",
+                "value": "US38141G1040",
+                "updateTime": "2002-02-09T17:58:27.58Z",
+                "type": "isin",
+            },
+            {
+                "startDate": "2007-01-01",
+                "endDate": "9999-99-99",
+                "value": "MA4B66MW5E27UAHKG34",
+                "updateTime": "2002-02-09T17:58:27.58Z",
+                "type": "assetId",
+            },
+        ]
+    }
+    mocker.patch.object(
+        GsSession.__class__, 'default_value', return_value=GsSession.get(Environment.QA, 'client_id', 'secret')
+    )
+    mocker.patch.object(GsSession.current.sync, 'get', side_effect=[mock_equity_response, mock_id_history])
+    with SecMasterContext():
+        return SecurityMaster.get_asset('GS UN', SecurityIdentifier.BBID)
+
+
+def test_secmaster_asset_get_identifier_with_security_identifier(mocker):
+    asset = _make_secmaster_asset_for_id_tests(mocker)
+    assert asset.get_identifier(SecurityIdentifier.BBID) == 'GS UN'
+    assert asset.get_identifier(SecurityIdentifier.TICKER) == 'GS'
+    assert asset.get_identifier(SecurityIdentifier.RIC) == 'GS.N'
+
+
+def test_secmaster_asset_get_identifier_with_asset_identifier(mocker):
+    asset = _make_secmaster_asset_for_id_tests(mocker)
+    # AssetIdentifier with a SecurityIdentifier equivalent should resolve to the same value.
+    assert asset.get_identifier(AssetIdentifier.BLOOMBERG_ID) == asset.get_identifier(SecurityIdentifier.BBID)
+    assert asset.get_identifier(AssetIdentifier.TICKER) == asset.get_identifier(SecurityIdentifier.TICKER)
+    assert asset.get_identifier(AssetIdentifier.REUTERS_ID) == asset.get_identifier(SecurityIdentifier.RIC)
+    assert asset.get_identifier(AssetIdentifier.ISIN) == asset.get_identifier(SecurityIdentifier.ISIN)
+
+
+def test_secmaster_asset_get_identifier_unsupported_asset_identifier_raises(mocker):
+    asset = _make_secmaster_asset_for_id_tests(mocker)
+    with pytest.raises(MqTypeError):
+        asset.get_identifier(AssetIdentifier.PLOT_ID)
+
+
+def test_secmaster_asset_get_identifier_invalid_type_raises(mocker):
+    asset = _make_secmaster_asset_for_id_tests(mocker)
+    with pytest.raises(MqTypeError):
+        asset.get_identifier("BBID")  # plain string is not accepted by get_identifier
+
+
+# ---------------------------------------------------------------------------
+# Tests for SecMasterAsset.__repr__ / __str__ producing JSON.
+# ---------------------------------------------------------------------------
+
+
+def test_secmaster_asset_repr_renders_json():
+    entity = {
+        "name": "GOLDMAN SACHS GROUP INC",
+        "type": "Common Stock",
+        "assetClass": "Equity",
+        "identifiers": {"bbid": "GS UN", "assetId": "MA4B66MW5E27UAHKG34"},
+        "id": "GSPD901026E154",
+    }
+    asset = SecMasterAsset(
+        id_="MA4B66MW5E27UAHKG34",
+        asset_type=AssetType.COMMON_STOCK,
+        asset_class=AssetClass.Equity,
+        name="GOLDMAN SACHS GROUP INC",
+        entity=entity,
+    )
+    rendered = repr(asset)
+    # Should be valid JSON containing entity contents.
+    parsed = json.loads(rendered)
+    assert parsed["name"] == entity["name"]
+    assert parsed["identifiers"]["bbid"] == "GS UN"
+    # __str__ should match __repr__
+    assert str(asset) == rendered
+
+
+def test_secmaster_asset_repr_falls_back_when_entity_none():
+    asset = SecMasterAsset(
+        id_="X",
+        asset_type=AssetType.COMMON_STOCK,
+        asset_class=AssetClass.Equity,
+        name="X",
+        entity=None,
+    )
+    # With no entity dict, should fall back to default object repr (not raise, not return JSON).
+    rendered = repr(asset)
+    assert rendered.startswith("<") and "SecMasterAsset" in rendered
+
+
+# ---------------------------------------------------------------------------
+# Tests for _get_security_master_asset_params (effectiveDate handling).
+# ---------------------------------------------------------------------------
+
+
+def test_get_security_master_asset_params_omits_effective_date_when_none():
+    params = SecurityMaster._get_security_master_asset_params(
+        id_value='GS UN', id_type=SecurityIdentifier.BBID, as_of=None
+    )
+    assert 'effectiveDate' not in params
+    assert 'asOfDate' not in params  # old key must not leak through
+    assert params['bbid'] == 'GS UN'
+
+
+def test_get_security_master_asset_params_uses_effective_date_with_date():
+    params = SecurityMaster._get_security_master_asset_params(
+        id_value='GS UN', id_type=SecurityIdentifier.BBID, as_of=dt.date(2024, 5, 1)
+    )
+    assert params['effectiveDate'] == '2024-05-01'
+    assert 'asOfDate' not in params
+
+
+def test_get_security_master_asset_params_uses_effective_date_with_datetime():
+    params = SecurityMaster._get_security_master_asset_params(
+        id_value='GS UN',
+        id_type=SecurityIdentifier.BBID,
+        as_of=dt.datetime(2024, 5, 1, 14, 30, 0),
+    )
+    # datetime should be coerced to its date.
+    assert params['effectiveDate'] == '2024-05-01'
+
+
+def test_get_security_master_asset_params_includes_fields():
+    params = SecurityMaster._get_security_master_asset_params(
+        id_value='GS UN',
+        id_type=SecurityIdentifier.BBID,
+        as_of=None,
+        fields=['exchange', 'name'],
+    )
+    assert 'fields' in params
+    assert 'name' in params['fields']
+    # Default fields always present
+    for required in ('identifiers', 'assetClass', 'type', 'currency', 'exchange', 'id'):
+        assert required in params['fields']
+
+
+def test_get_security_master_asset_sends_effective_date(mocker):
+    """End-to-end: verify get_asset under SECURITY_MASTER sends effectiveDate in payload."""
+    mock_response = {
+        "results": [
+            {
+                "name": "GS",
+                "type": "Common Stock",
+                "currency": "USD",
+                "assetClass": "Equity",
+                "identifiers": {"bbid": "GS UN", "assetId": "MA4B66MW5E27UAHKG34"},
+                "exchange": {"name": "NYSE", "identifiers": {"gsExchangeId": 154}},
+                "id": "GSPD901026E154",
+            }
+        ],
+        "totalResults": 1,
+    }
+    mocker.patch.object(
+        GsSession.__class__, 'default_value', return_value=GsSession.get(Environment.QA, 'client_id', 'secret')
+    )
+    captured = {}
+
+    def fake_get(url, payload=None, **kwargs):
+        captured['payload'] = payload
+        return mock_response
+
+    mocker.patch.object(GsSession.current.sync, 'get', side_effect=fake_get)
+    with SecMasterContext():
+        SecurityMaster.get_asset('GS UN', SecurityIdentifier.BBID, as_of=dt.date(2024, 5, 1))
+    assert captured['payload']['effectiveDate'] == '2024-05-01'
+    assert 'asOfDate' not in captured['payload']
 
 
 if __name__ == "__main__":

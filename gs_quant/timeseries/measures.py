@@ -5264,7 +5264,6 @@ def commodity_forecast_time_series(
         str, _CommodityForecastTimeSeriesPeriodType
     ] = _CommodityForecastTimeSeriesPeriodType.ANNUAL,
     forecastType: _CommodityForecastType = _CommodityForecastType.SPOT,
-    forecastHorizonYears: int = 12,
     *,
     source: str = None,
     real_time: bool = False,
@@ -5295,62 +5294,44 @@ def commodity_forecast_time_series(
     query_type = QueryType.COMMODITY_FORECAST
     col_name = query_type.value.replace(' ', '')
     col_name = col_name[0].lower() + col_name[1:]
-
-    today = dt.date.today()
-    start_year = today.year
-    end_year = start_year + forecastHorizonYears
+    q = GsDataApi.build_market_data_query(
+        [mqid],
+        query_type,
+        where=dict(forecastType=forecastType),
+        source=source,
+        real_time=real_time,
+    )
+    df = _market_data_timed(q, request_id)
+    df.index.name = 'date'
+    df = df.reset_index().sort_values(by='date').groupby(['forecastPeriod', 'forecastType'])[['date', col_name]].last()
+    df = df.reset_index()
     if forecastFrequency == _CommodityForecastTimeSeriesPeriodType.SHORT_TERM.value:
-        periods = ["3m", "6m", "12m"]
+        df = df[df['forecastPeriod'].isin(['3m', '6m', '12m'])].drop('date', axis=1)
+        df['date'] = df['forecastPeriod'].apply(
+            lambda x: (pd.Timestamp.today() + relativedelta(months=int(x[:-1]))).normalize()
+        )
+        df = df[['date', col_name]].sort_values(by='date').set_index('date')
     elif forecastFrequency == _CommodityForecastTimeSeriesPeriodType.MONTHLY.value:
-        periods = [
-            f"{date.year}M{date.month}"
-            for date in pd.date_range(start=f"{start_year}-01-01", end=f"{end_year}-01-01", freq="MS")
-        ]
+        df = df[df['forecastPeriod'].str.contains('M')].drop('date', axis=1)
+        df['date'] = df['forecastPeriod'].apply(
+            lambda x: pd.Timestamp(f"{x.split('M')[0]}-{int(x.split('M')[1]):02d}-01")
+        )
+        df = df[['date', col_name]].sort_values(by='date').set_index('date')
     elif forecastFrequency == _CommodityForecastTimeSeriesPeriodType.QUARTERLY.value:
-        periods = pd.period_range(start=f"{start_year}-01-01", end=f"{end_year}-01-01", freq="Q").strftime("%YQ%q")
+        df = df[df['forecastPeriod'].str.contains('Q')].drop('date', axis=1)
+        df['date'] = df['forecastPeriod'].apply(
+            lambda x: pd.Timestamp(f"{x.split('Q')[0]}-{(int(x.split('Q')[1]) - 1) * 3 + 1:02d}-01")
+        )
+        df = df[['date', col_name]].sort_values(by='date').set_index('date')
     elif forecastFrequency == _CommodityForecastTimeSeriesPeriodType.ANNUAL.value:
-        periods = pd.date_range(start=f"{start_year}-01-01", end=f"{end_year}-01-01", freq="YS").strftime("%Y")
+        df = df[df['forecastPeriod'].str.match(r'^\d{4}$')].drop('date', axis=1)
+        df['date'] = df['forecastPeriod'].apply(lambda x: pd.Timestamp(f"{x}-01-01"))
+        df = df[['date', col_name]].sort_values(by='date').set_index('date')
     else:
         raise ValueError(
             "Invalid forecastFrequency. Must be one of '3/6/12-Month Rolling', 'Monthly', 'Quarterly', 'Annual'."
         )
-    results = []
-
-    context_end = dt.date.today()
-    context_start = context_end - dt.timedelta(days=30)
-
-    tasks = []
-    with DataContext(context_start, context_end):
-        for period in periods:
-            q = GsDataApi.build_market_data_query(
-                [mqid],
-                query_type,
-                where=dict(forecastPeriod=period, forecastType=forecastType),
-                source=source,
-                real_time=real_time,
-            )
-            tasks.append(partial(_market_data_timed, q, request_id))
-
-    dataframes = ThreadPoolManager.run_async(tasks)
-    for period, df in zip(periods, dataframes):
-        if df is not None and not df.empty:
-            last_value = df[col_name].iloc[-1]
-            if 'm' in period:
-                months = int(period[:-1])
-                start_of_period = pd.Timestamp.today() + relativedelta(months=months)
-            elif "Q" in period:
-                year = int(period[:4])
-                quarter = int(period[-1])
-                start_of_period = pd.Timestamp(f"{year}-{(quarter - 1) * 3 + 1:02d}-01")
-            elif "M" in period:
-                month = int(period[5:])
-                start_of_period = pd.Timestamp(period[:4] + "-01-01")
-                start_of_period = start_of_period.replace(month=month)
-            else:
-                start_of_period = pd.Timestamp(period[:4] + "-01-01")
-            results.append({'date': start_of_period.strftime('%Y-%m-%d'), col_name: last_value})
-
-    df = pd.DataFrame(results).set_index('date')
+    df = df[df.index >= pd.Timestamp(year=pd.Timestamp.today().year, month=1, day=1)]
     series = _extract_series_from_df(df, query_type)
     return series
 
