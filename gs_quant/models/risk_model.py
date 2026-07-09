@@ -44,6 +44,10 @@ from gs_quant.models.risk_model_utils import (
     batch_and_upload_partial_data,
     build_factor_volatility_dataframe,
     batch_and_upload_coverage_data,
+    merge_asset_data,
+    _ALL_ASSET_MEASURES,
+    _stitch_asset_data_batches,
+    _PARTIAL_UPDATE_FETCH_BATCH_SIZE,
 )
 from gs_quant.target.risk_models import (
     RiskModel as RiskModelBuilder,
@@ -1273,6 +1277,160 @@ class MarqueeRiskModel(RiskModel):
         else:
             logging.info('Uploading model data in one request')
             upload_model_data(self.id, data, aws_upload=aws_upload)
+
+    def update_partial_data(
+        self,
+        date: dt.date,
+        data: Union[RiskModelData, Dict],
+        max_asset_batch_size: int = 10000,
+        aws_upload: bool = True,
+    ) -> Dict:
+        """Patch asset data for a single date by merging data over what is already stored.
+
+        Only the assets listed in data['assetData']['universe'] are fetched, merged,
+        and uploaded.  The rest of the model's universe is left completely untouched
+
+        Existing data for the input assets is fetched in batches,
+        merged field-by-field (new data values win on conflict, existing values for unlisted fields are preserved),
+        and re-uploaded.
+
+        Only 'assetData' is supported.  Any other top-level key
+        (factorData, covarianceMatrix, issuerSpecificCovariance, factorPortfolios,
+        currencyRatesData) raises MqValueError - use upload_data for those.
+
+        The date must already have data on the model; MqRequestError(404) is raised otherwise;
+         use upload_data to populate new dates.
+
+        :param date: the date whose asset data should be updated
+        :param data: dict or RiskModelData containing an 'assetData' key.
+            The 'universe' array determines which assets are fetched, merged, and uploaded.
+        :param max_asset_batch_size: forwarded to upload_data for batching large uploads
+        :param aws_upload: forwarded to upload_data
+        :return: dict with 'date' and 'assetData' keys representing the uploaded payload
+        :raises MqValueError: if data contains unsupported keys or is missing 'assetData'
+        :raises MqRequestError: if no existing data is found for the given date
+        """
+        if isinstance(data, RiskModelData):
+            data = data.as_dict()
+
+        # Only assetData (and the optional 'date' metadata key) are supported
+        unsupported_keys = set(data.keys()) - {'assetData', 'date'}
+        if unsupported_keys:
+            raise MqValueError(
+                f"update_partial_data only supports 'assetData'. "
+                f"Unsupported keys: {sorted(unsupported_keys)}. "
+                f"Use upload_data for other data types."
+            )
+
+        asset_data = data.get('assetData')
+        if not asset_data:
+            raise MqValueError("data must contain an 'assetData' key.")
+
+        # factorExposure is server-generated; the caller must never supply it.
+        if 'factorExposure' in asset_data:
+            raise MqValueError(
+                "please use upload_data to update factor exposure, it is not allowed in update_partial_data"
+            )
+
+        universe = list(asset_data.get('universe', []))
+        if not universe:
+            raise MqValueError("data assetData must include a non-empty 'universe' list.")
+
+        if len(universe) != len(set(universe)):
+            duplicates = sorted({a for a in universe if universe.count(a) > 1})
+            raise MqValueError(f"data assetData 'universe' contains duplicate asset(s): {duplicates}.")
+
+        # Validate all measure arrays match the universe length before touching the network
+        for field, arr in asset_data.items():
+            if field == 'universe' or arr is None:
+                continue
+            if len(arr) != len(universe):
+                raise MqValueError(
+                    f"data assetData field '{field}' has {len(arr)} values "
+                    f"but 'universe' has {len(universe)} — all arrays must be the same length."
+                )
+
+        date_str = date.strftime('%Y-%m-%d')
+        request_identifier = RiskModelUniverseIdentifierRequest(self.universe_identifier.value)
+
+        input_measures = sorted(f for f in asset_data if f != 'universe')
+        logging.info(
+            f'update_partial_data [{self.id}] {date_str}: '
+            f'{len(universe)} asset(s), measures to update: {input_measures}'
+        )
+
+        # Step 1: fetch existing data for the input universe only, in batches.
+        # We deliberately do NOT fetch the full model universe — we only care about
+        # the assets the caller wants to update.
+        n_batches = max(1, -(-len(universe) // _PARTIAL_UPDATE_FETCH_BATCH_SIZE))  # ceiling div
+        logging.info(
+            f'Fetching existing data for {len(universe)} asset(s) '
+            f'on {date_str} in {n_batches} batch(es) for model {self.id}...'
+        )
+
+        asset_batches = [
+            universe[i : i + _PARTIAL_UPDATE_FETCH_BATCH_SIZE]
+            for i in range(0, len(universe), _PARTIAL_UPDATE_FETCH_BATCH_SIZE)
+        ]
+        batch_asset_data_list = []
+        for i, batch in enumerate(asset_batches):
+            logging.info(f'Fetching batch {i + 1}/{n_batches} ({len(batch)} assets) for model {self.id}...')
+            try:
+                response = GsFactorRiskModelApi.get_risk_model_data(
+                    model_id=self.id,
+                    start_date=date,
+                    end_date=date,
+                    assets=DataAssetsRequest(request_identifier, batch),
+                    measures=_ALL_ASSET_MEASURES,
+                    limit_factors=False,
+                )
+            except MqRequestError as e:
+                raise MqRequestError(
+                    e.status,
+                    f"Failed to fetch data for batch {i + 1}/{n_batches} on {date_str}: {e.message}",
+                ) from e
+
+            results = response.get('results', [])
+            if not results or not results[0].get('assetData'):
+                raise MqRequestError(
+                    404,
+                    f"No existing data found for model '{self.id}' on {date_str}. "
+                    f"Use upload_data to upload data for new dates.",
+                )
+            batch_asset_data = results[0]['assetData']
+            batch_measures = sorted(f for f in batch_asset_data if f != 'universe')
+            logging.info(f'Batch {i + 1}/{n_batches} returned {len(batch_measures)} measure(s): {batch_measures}')
+            batch_asset_data_list.append(batch_asset_data)
+
+        # Step 2: stitch all fetch batches into one assetData dict
+        existing_asset_data = _stitch_asset_data_batches(batch_asset_data_list)
+        existing_measures = sorted(f for f in existing_asset_data if f != 'universe')
+        logging.info(
+            f'Existing data for model {self.id} on {date_str}: {len(existing_measures)} measure(s) found: {existing_measures}'
+        )
+
+        # Step 3: merge — input wins on conflict, existing fields preserved.
+        merged_asset_data = merge_asset_data(existing_asset_data, asset_data)
+
+        merged_measures = sorted(f for f in merged_asset_data if f != 'universe')
+        updated_measures = sorted(f for f in input_measures if f in merged_measures)
+        preserved_measures = sorted(f for f in existing_measures if f not in input_measures and f in merged_measures)
+        skipped_measures = sorted(f for f in input_measures if f not in merged_measures)
+        logging.info(
+            f'Merge result for model {self.id} on {date_str}: '
+            f'updated={updated_measures}, preserved={preserved_measures}'
+            + (f', skipped (incomplete coverage)={skipped_measures}' if skipped_measures else '')
+        )
+
+        # Step 4: upload only the merged input universe (server leaves all other assets alone)
+        upload_payload = {'date': date_str, 'assetData': merged_asset_data}
+        logging.info(
+            f'Uploading {len(merged_asset_data.get("universe", []))} asset(s) for {date_str} on model {self.id}...'
+        )
+        self.upload_data(upload_payload, max_asset_batch_size=max_asset_batch_size, aws_upload=aws_upload)
+        logging.info(f'Upload complete for model {self.id} on {date_str}.')
+
+        return upload_payload
 
     @deprecation.deprecated(deprecated_in="0.9.42", details="Please use upload_data instead")
     def upload_partial_data(self, data: Union[RiskModelData, dict], final_upload: bool = None):

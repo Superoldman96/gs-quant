@@ -26,7 +26,7 @@ import pandas as pd
 
 from gs_quant.api.gs.data import GsDataApi
 from gs_quant.api.gs.risk_models import GsFactorRiskModelApi
-from gs_quant.errors import MqRequestError
+from gs_quant.errors import MqRequestError, MqValueError
 from gs_quant.target.risk_models import RiskModelData, RiskModelType as Type
 from gs_quant.target.risk_models import RiskModelDataMeasure as Measure
 
@@ -415,6 +415,171 @@ def get_universe_size(data_to_split: dict) -> int:
         if 'universeId1' in data.keys():
             return len(data.get('universeId1'))
     raise ValueError(f'No universe found for data {data_to_split}')
+
+
+# ---------------------------------------------------------------------------
+# Partial update helpers
+# ---------------------------------------------------------------------------
+
+# Number of assets per request when fetching existing data for a partial update.
+_PARTIAL_UPDATE_FETCH_BATCH_SIZE = 2000
+
+# All asset-level measures to request when fetching a full day's asset data.
+# The API silently omits measures that have no data, so including extras is safe.
+_ALL_ASSET_MEASURES = [
+    Measure.Asset_Universe,
+    Measure.Specific_Risk,
+    Measure.Unadjusted_Specific_Risk,
+    Measure.Total_Risk,
+    Measure.Historical_Beta,
+    Measure.Predicted_Beta,
+    Measure.Global_Predicted_Beta,
+    Measure.Daily_Return,
+    Measure.Specific_Return,
+    Measure.Estimation_Universe_Weight,
+    Measure.Residual_Variance,
+    Measure.R_Squared,
+    Measure.Fair_Value_Gap_Percent,
+    Measure.Fair_Value_Gap_Standard_Deviation,
+    Measure.Universe_Factor_Exposure,
+    Measure.Factor_Id,  # required to reconstruct factorExposure keys
+    Measure.Bid_Ask_Spread,
+    Measure.Bid_Ask_Spread_30d,
+    Measure.Bid_Ask_Spread_60d,
+    Measure.Bid_Ask_Spread_90d,
+    Measure.Trading_Volume,
+    Measure.Trading_Volume_30d,
+    Measure.Trading_Volume_60d,
+    Measure.Trading_Volume_90d,
+    Measure.Traded_Value_30d,
+    Measure.Composite_Volume,
+    Measure.Composite_Volume_30d,
+    Measure.Composite_Volume_60d,
+    Measure.Composite_Volume_90d,
+    Measure.Composite_Value_30d,
+    Measure.Issuer_Market_Cap,
+    Measure.Price,
+    Measure.Model_Price,
+    Measure.Capitalization,
+    Measure.Currency,
+    Measure.Dividend_Yield,
+]
+
+
+def merge_asset_data(existing: dict, partial: dict) -> dict:
+    """Merge two assetData dicts, applying partial field-level updates onto existing data.
+
+    ``existing`` is always fetched from the API keyed on the same universe as
+    ``partial``, so both dicts cover exactly the same set of assets. The output
+    universe is therefore identical to the existing (and partial) universe.
+
+    Merge rules (per field, per asset):
+    - Fields present in both: partial wins, except for ``specificRisk`` where a
+      ``None`` partial value falls back to the existing value (``None`` is a
+      sentinel meaning "no data" for that field only; for every other field
+      ``None`` is a valid data value).
+    - Fields only in existing: carried over unchanged.
+    - Fields only in partial: included as-is.
+    - ``residualVariance`` is always excluded from the output (server-generated).
+
+    :param existing: assetData dict fetched from the API for the partial universe
+    :param partial: user-supplied assetData update (must include a 'universe', must not include 'factorExposure')
+    :return: merged assetData dict ready for upload
+    :raises MqValueError: if partial and existing universes do not match exactly
+    """
+    existing_universe = list(existing.get('universe', []))
+    partial_universe = list(partial.get('universe', []))
+
+    existing_idx = {asset: i for i, asset in enumerate(existing_universe)}
+    partial_idx = {asset: i for i, asset in enumerate(partial_universe)}
+
+    # existing is always fetched from the API using partial_universe as the query key, so the two
+    # universes must be identical (same assets, though order may differ).
+    if set(existing_universe) != set(partial_universe):
+        missing_from_partial = sorted(set(existing_universe) - set(partial_universe))
+        unknown_in_partial = sorted(set(partial_universe) - set(existing_universe))
+        raise MqValueError(
+            "Partial and existing universes must match exactly. "
+            + (f"Assets in existing but missing from partial: {missing_from_partial}. " if missing_from_partial else "")
+            + (f"Assets in partial not found in existing: {unknown_in_partial}." if unknown_in_partial else "")
+        )
+
+    # Both dicts cover the same universe; use existing ordering as canonical.
+    universe = existing_universe
+
+    # specificRisk must never be None — None is a sentinel inserted by _stitch_asset_data_batches
+    # when a batch response omitted the field for some assets. A None partial value falls back
+    # to the existing value.
+    _REQUIRED_NON_NA_FIELDS = {'specificRisk'}
+
+    # residualVariance is always server-generated from specificRisk and factorExposure.
+    # Re-uploading it would conflict with the server's computed value, so always drop it.
+    _EXCLUDED_FIELDS = {'universe', 'residualVariance'}
+
+    result = {'universe': universe}
+
+    all_fields = (set(existing.keys()) | set(partial.keys())) - _EXCLUDED_FIELDS
+    for field in all_fields:
+        existing_arr = existing.get(field)
+        partial_arr = partial.get(field)
+        required_non_na = field in _REQUIRED_NON_NA_FIELDS
+
+        merged_arr = []
+        for asset in universe:
+            if partial_arr is not None:
+                candidate = partial_arr[partial_idx[asset]]
+                # For required_non_na fields, a None partial value is not a real update — fall back.
+                if candidate is not None or not required_non_na:
+                    merged_arr.append(candidate)
+                    continue
+
+            # Field absent from partial, or required_non_na sentinel: use existing value.
+            merged_arr.append(existing_arr[existing_idx[asset]] if existing_arr is not None else None)
+
+        result[field] = merged_arr
+
+    return result
+
+
+def _stitch_asset_data_batches(batches: List[dict]) -> dict:
+    """Stitch a list of assetData batch dicts into one full assetData dict.
+
+    Takes the union of all field names across every batch so that a measure
+    present in any batch is never silently dropped.  If a field is absent from
+    a particular batch (the API didn't return it for those assets), the missing
+    entries are filled with None to keep every array the same length as the
+    stitched universe.  For ``specificRisk`` and ``factorExposure`` these None
+    sentinels are recognised by ``merge_asset_data`` and cause it to fall back
+    to the existing value for those assets; for all other fields None is a
+    valid data value and is preserved as-is.
+
+    :param batches: list of assetData dicts, one per fetch batch
+    :return: single merged assetData dict
+    """
+    if not batches:
+        return {}
+    if len(batches) == 1:
+        return dict(batches[0])
+
+    # Stitch universe positionally — it is the index key, not a data field.
+    result: dict = {'universe': [asset for batch in batches for asset in batch['universe']]}
+
+    # Union of data fields across every batch (universe already handled above).
+    all_fields: set = set()
+    for batch in batches:
+        all_fields |= set(batch.keys())
+    all_fields.discard('universe')
+
+    for field in all_fields:
+        combined = []
+        for batch in batches:
+            if field in batch:
+                combined.extend(batch[field])
+            else:
+                # Field absent for these assets — fill with None to preserve array alignment.
+                combined.extend([None] * len(batch['universe']))
+        result[field] = combined
+    return result
 
 
 def _batch_input_data(input_data: dict, max_asset_size: int):

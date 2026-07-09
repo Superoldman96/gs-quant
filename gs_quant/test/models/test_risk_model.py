@@ -22,7 +22,11 @@ from pandas._testing import assert_frame_equal
 
 from gs_quant.common import Currency
 from gs_quant.models.risk_model import FactorRiskModel, MacroRiskModel, ReturnFormat, Unit
-from gs_quant.models.risk_model_utils import get_optional_data_as_dataframe, _map_measure_to_field_name
+from gs_quant.models.risk_model_utils import (
+    get_optional_data_as_dataframe,
+    _map_measure_to_field_name,
+    merge_asset_data,
+)
 from gs_quant.session import GsSession, Environment
 from gs_quant.target.risk_models import (
     RiskModel as Risk_Model,
@@ -1752,6 +1756,410 @@ def test_get_currency_exchange_rate(mocker):
     )
 
     assert_frame_equal(expected_data_frame, actual_data_frame, check_like=True)
+
+
+# ---------------------------------------------------------------------------
+# merge_asset_data unit tests (pure function, no I/O)
+# ---------------------------------------------------------------------------
+
+
+def test_merge_asset_data_update_existing_measure():
+    """Partial updates a measure for all assets in the universe."""
+    existing = {
+        'universe': ['A', 'B', 'C'],
+        'specificRisk': [10.0, 20.0, 30.0],
+        'predictedBeta': [1.1, 0.9, 1.0],
+        'factorExposure': [{'f1': 0.1}, {'f1': 0.2}, {'f1': 0.3}],
+    }
+    partial = {
+        'universe': ['A', 'B', 'C'],
+        'predictedBeta': [1.5, 0.8, 0.7],
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    assert result['universe'] == ['A', 'B', 'C']
+    assert result['specificRisk'] == [10.0, 20.0, 30.0]  # unchanged
+    assert result['predictedBeta'] == [1.5, 0.8, 0.7]  # all updated
+    assert result['factorExposure'] == [{'f1': 0.1}, {'f1': 0.2}, {'f1': 0.3}]  # unchanged
+
+
+def test_merge_asset_data_update_all_assets():
+    """Partial covers the full universe — simple full replacement of one measure."""
+    existing = {
+        'universe': ['A', 'B'],
+        'specificRisk': [10.0, 20.0],
+        'predictedBeta': [1.1, 0.9],
+    }
+    partial = {
+        'universe': ['A', 'B'],
+        'predictedBeta': [2.0, 3.0],
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    assert result['universe'] == ['A', 'B']
+    assert result['specificRisk'] == [10.0, 20.0]
+    assert result['predictedBeta'] == [2.0, 3.0]
+
+
+def test_merge_asset_data_add_new_measure_full_coverage():
+    """Adding a brand-new measure when partial covers all existing assets."""
+    existing = {
+        'universe': ['A', 'B', 'C'],
+        'specificRisk': [10.0, 20.0, 30.0],
+    }
+    partial = {
+        'universe': ['A', 'B', 'C'],
+        'totalRisk': [1.0, 2.0, 3.0],
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    assert result['universe'] == ['A', 'B', 'C']
+    assert result['specificRisk'] == [10.0, 20.0, 30.0]
+    assert result['totalRisk'] == [1.0, 2.0, 3.0]
+
+
+def test_merge_asset_data_raises_on_universe_mismatch():
+    """Partial universe must exactly match the existing universe (both directions)."""
+    from gs_quant.errors import MqValueError
+
+    # partial is a strict subset of existing
+    with pytest.raises(MqValueError, match="must match exactly"):
+        merge_asset_data(
+            {'universe': ['A', 'B', 'C'], 'specificRisk': [1.0, 2.0, 3.0]},
+            {'universe': ['A', 'C'], 'specificRisk': [1.5, 0.7]},
+        )
+
+    # partial contains an asset not in existing
+    with pytest.raises(MqValueError, match="must match exactly"):
+        merge_asset_data(
+            {'universe': ['A', 'B'], 'specificRisk': [1.0, 2.0]},
+            {'universe': ['A', 'B', 'C'], 'specificRisk': [1.0, 2.0, 3.0]},
+        )
+
+    # completely disjoint
+    with pytest.raises(MqValueError, match="must match exactly"):
+        merge_asset_data(
+            {'universe': ['A', 'B'], 'specificRisk': [1.0, 2.0]},
+            {'universe': ['C', 'D'], 'specificRisk': [3.0, 4.0]},
+        )
+
+
+def test_merge_asset_data_order_independent():
+    """Universe order in partial need not match existing; existing order is canonical in output."""
+    existing = {
+        'universe': ['A', 'B', 'C'],
+        'specificRisk': [1.0, 2.0, 3.0],
+    }
+    partial = {
+        'universe': ['C', 'A', 'B'],  # different order
+        'specificRisk': [30.0, 10.0, 20.0],
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    assert result['universe'] == ['A', 'B', 'C']  # existing order preserved
+    assert result['specificRisk'] == [10.0, 20.0, 30.0]  # aligned correctly
+
+
+def test_merge_asset_data_factor_exposure():
+    """factorExposure validation is the caller's responsibility (update_partial_data raises before
+    calling merge_asset_data). merge_asset_data itself is field-agnostic: if factorExposure appears
+    in existing but not in partial, it is carried over unchanged."""
+    existing = {
+        'universe': ['A', 'B'],
+        'specificRisk': [10.0, 20.0],
+        'factorExposure': [{'f1': 0.5}, {'f1': 0.8}],
+    }
+    # Caller has already stripped factorExposure from partial before calling merge_asset_data.
+    partial = {
+        'universe': ['A', 'B'],
+        'specificRisk': [11.0, 21.0],
+    }
+    result = merge_asset_data(existing, partial)
+    assert result['specificRisk'] == [11.0, 21.0]  # partial wins
+    assert result['factorExposure'] == [{'f1': 0.5}, {'f1': 0.8}]  # carried from existing
+
+
+def test_merge_asset_data_raises_on_empty_partial_universe():
+    """Empty partial universe is caught by update_partial_data before merge_asset_data is called.
+    merge_asset_data itself raises a universe-mismatch error for this case."""
+    from gs_quant.errors import MqValueError
+
+    with pytest.raises(MqValueError, match="universes must match exactly"):
+        merge_asset_data({'universe': ['A']}, {'universe': []})
+
+
+def test_merge_asset_data_preserves_existing_order():
+    """Output universe always follows existing ordering regardless of partial ordering."""
+    existing = {
+        'universe': ['C', 'A', 'B'],
+        'specificRisk': [3.0, 1.0, 2.0],
+    }
+    partial = {
+        'universe': ['B', 'C', 'A'],  # different order, same assets
+        'specificRisk': [20.0, 30.0, 10.0],
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    assert result['universe'] == ['C', 'A', 'B']  # existing order
+    assert result['specificRisk'] == [30.0, 10.0, 20.0]  # C=30, A=10, B=20 (partial values, existing order)
+
+
+def test_merge_asset_data_none_sentinel_in_required_non_na_field_falls_back_to_existing():
+    """For specificRisk, a None in the partial array is a sentinel (not a real update)
+    and falls back to the existing value. This can happen if _stitch_asset_data_batches produced
+    None entries that leak into the partial payload."""
+    from gs_quant.models.risk_model_utils import merge_asset_data
+
+    existing = {
+        'universe': ['A', 'B'],
+        'specificRisk': [1.0, 2.0],
+    }
+    # Partial has None for B's specificRisk (sentinel) — should fall back to existing value 2.0.
+    partial = {
+        'universe': ['A', 'B'],
+        'specificRisk': [9.0, None],
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    assert result['specificRisk'] == [9.0, 2.0]  # A updated, B falls back to existing
+
+
+def test_merge_asset_data_none_valid_for_optional_fields():
+    """None is a valid data value for non-required fields (e.g. predictedBeta) and is preserved."""
+    from gs_quant.models.risk_model_utils import merge_asset_data
+
+    existing = {
+        'universe': ['A', 'B'],
+        'specificRisk': [1.0, 2.0],
+        'predictedBeta': [0.5, None],  # None is a legitimate stored value here
+    }
+    partial = {
+        'universe': ['A', 'B'],
+        'predictedBeta': [0.9, 0.8],  # update both
+    }
+
+    result = merge_asset_data(existing, partial)
+
+    # Partial wins for both
+    assert result['predictedBeta'] == [0.9, 0.8]
+    assert result['specificRisk'] == [1.0, 2.0]
+
+
+# ---------------------------------------------------------------------------
+# _stitch_asset_data_batches unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_stitch_union_includes_field_from_any_batch():
+    """A field present in only one batch must appear in the stitched result."""
+    from gs_quant.models.risk_model_utils import _stitch_asset_data_batches
+
+    batch1 = {'universe': ['A', 'B'], 'specificRisk': [1.0, 2.0], 'predictedBeta': [0.5, 0.6]}
+    batch2 = {'universe': ['C', 'D'], 'specificRisk': [3.0, 4.0]}  # no predictedBeta
+
+    result = _stitch_asset_data_batches([batch1, batch2])
+
+    assert result['universe'] == ['A', 'B', 'C', 'D']
+    assert result['specificRisk'] == [1.0, 2.0, 3.0, 4.0]
+    # predictedBeta present in batch1 only — C and D filled with None
+    assert result['predictedBeta'] == [0.5, 0.6, None, None]
+
+
+def test_stitch_union_none_fill_for_first_batch_missing_field():
+    """None fill also works when the first batch is the one missing the field."""
+    from gs_quant.models.risk_model_utils import _stitch_asset_data_batches
+
+    batch1 = {'universe': ['A', 'B'], 'specificRisk': [1.0, 2.0]}  # no predictedBeta
+    batch2 = {'universe': ['C', 'D'], 'specificRisk': [3.0, 4.0], 'predictedBeta': [0.7, 0.8]}
+
+    result = _stitch_asset_data_batches([batch1, batch2])
+
+    assert result['universe'] == ['A', 'B', 'C', 'D']
+    assert result['specificRisk'] == [1.0, 2.0, 3.0, 4.0]
+    # A and B filled with None, C and D from batch2
+    assert result['predictedBeta'] == [None, None, 0.7, 0.8]
+
+
+def test_stitch_single_batch_returns_copy():
+    """Single batch is returned as-is (fast path)."""
+    from gs_quant.models.risk_model_utils import _stitch_asset_data_batches
+
+    batch = {'universe': ['A'], 'specificRisk': [1.0]}
+    result = _stitch_asset_data_batches([batch])
+
+    assert result == batch
+    assert result is not batch  # should be a copy
+
+
+def test_stitch_empty_returns_empty():
+    from gs_quant.models.risk_model_utils import _stitch_asset_data_batches
+
+    assert _stitch_asset_data_batches([]) == {}
+
+
+# ---------------------------------------------------------------------------
+# update_partial_data integration tests
+# ---------------------------------------------------------------------------
+
+
+def _make_query_response(date_str, asset_data):
+    """Helper: build a /query response for a single date."""
+    return {'results': [{'date': date_str, 'assetData': asset_data}], 'totalResults': 1}
+
+
+def test_update_partial_data_fetch_and_merge(mocker):
+    """Fetches existing data only for the partial universe, merges, and uploads only those assets."""
+    model = mock_risk_model(mocker)
+    mocker.patch('gs_quant.models.risk_model_utils.sleep', return_value=None)
+
+    date = dt.date(2023, 4, 14)
+    date_str = '2023-04-14'
+
+    # Server returns existing data for the two assets in the partial universe.
+    # asset2 (not in the partial) is never fetched or touched.
+    existing_for_partial = {
+        'universe': ['asset1', 'asset3'],
+        'specificRisk': [10.0, 30.0],
+        'factorExposure': [{'1': 0.1}, {'1': 0.3}],
+        'predictedBeta': [1.1, 1.0],
+    }
+
+    def mock_post(url, data, timeout=None):
+        if url.endswith('/query'):
+            return _make_query_response(date_str, existing_for_partial)
+        return 'Upload Successful'
+
+    mocker.patch.object(GsSession.current.sync, 'post', side_effect=mock_post)
+
+    partial = {'assetData': {'universe': ['asset1', 'asset3'], 'predictedBeta': [1.5, 0.7]}}
+    result = model.update_partial_data(date, partial)
+
+    assert result['date'] == date_str
+    merged = result['assetData']
+
+    # Only the 2 partial assets — NOT the full model universe — are in the upload
+    assert merged['universe'] == ['asset1', 'asset3']
+    assert merged['predictedBeta'] == [1.5, 0.7]  # both updated by partial
+    assert merged['specificRisk'] == [10.0, 30.0]  # preserved from existing
+    assert merged['factorExposure'] == [{'1': 0.1}, {'1': 0.3}]  # preserved from existing
+
+    # Exactly one query call (fetch the 2 partial assets), then upload call(s)
+    post_calls = GsSession.current.sync.post.call_args_list
+    query_calls = [c for c in post_calls if c[0][0].endswith('/query')]
+    upload_calls = [c for c in post_calls if 'partialUpload' in c[0][0]]
+    assert len(query_calls) == 1
+    assert len(upload_calls) >= 1
+
+
+def test_update_partial_data_batches_large_partial_universe(mocker):
+    """When the partial universe exceeds _PARTIAL_UPDATE_FETCH_BATCH_SIZE, multiple batches are fetched."""
+    from gs_quant.models.risk_model_utils import _PARTIAL_UPDATE_FETCH_BATCH_SIZE
+
+    model = mock_risk_model(mocker)
+    mocker.patch('gs_quant.models.risk_model_utils.sleep', return_value=None)
+
+    date = dt.date(2023, 4, 14)
+    date_str = '2023-04-14'
+
+    # Partial universe spans exactly 2 fetch batches
+    partial_universe = [f'asset{i}' for i in range(_PARTIAL_UPDATE_FETCH_BATCH_SIZE + 3)]
+
+    def build_existing(universe_slice):
+        return {
+            'universe': list(universe_slice),
+            'specificRisk': [1.0] * len(universe_slice),
+            'factorExposure': [{'1': 0.1}] * len(universe_slice),
+        }
+
+    def mock_post(url, data, timeout=None):
+        if url.endswith('/query'):
+            requested = list(data.get('assets').universe)
+            return _make_query_response(date_str, build_existing(requested))
+        return 'Upload Successful'
+
+    mocker.patch.object(GsSession.current.sync, 'post', side_effect=mock_post)
+
+    partial = {
+        'assetData': {
+            'universe': partial_universe,
+            'specificRisk': [999.0] * len(partial_universe),
+        }
+    }
+    result = model.update_partial_data(date, partial)
+
+    merged = result['assetData']
+
+    # Upload contains only the partial universe — the same count we sent in
+    assert len(merged['universe']) == len(partial_universe)
+    # All specificRisk come from partial (999.0)
+    assert all(v == 999.0 for v in merged['specificRisk'])
+    # factorExposure preserved from existing
+    assert merged['factorExposure'] == [{'1': 0.1}] * len(partial_universe)
+
+    # Two query calls (2 data batches), no extra universe-only fetch
+    post_calls = GsSession.current.sync.post.call_args_list
+    query_calls = [c for c in post_calls if c[0][0].endswith('/query')]
+    assert len(query_calls) == 2
+
+
+def test_update_partial_data_raises_on_unsupported_keys(mocker):
+    """Raises MqValueError when data contains keys other than 'assetData'/'date'."""
+    from gs_quant.errors import MqValueError
+
+    model = mock_risk_model(mocker)
+    for bad_input in [
+        {'assetData': {'universe': ['a'], 'specificRisk': [1.0]}, 'factorData': []},
+        {'covarianceMatrix': [[1.0]]},
+        {'issuerSpecificCovariance': {}, 'assetData': {'universe': ['a']}},
+    ]:
+        with pytest.raises(MqValueError, match="Unsupported keys"):
+            model.update_partial_data(dt.date(2023, 4, 14), bad_input)
+
+
+def test_update_partial_data_raises_missing_asset_data(mocker):
+    """Raises MqValueError when data has no 'assetData' key."""
+    from gs_quant.errors import MqValueError
+
+    model = mock_risk_model(mocker)
+    with pytest.raises(MqValueError, match="assetData"):
+        model.update_partial_data(dt.date(2023, 4, 14), {})
+
+
+def test_update_partial_data_raises_mismatched_array_lengths(mocker):
+    """Array-length mismatch is caught before any network call."""
+    from gs_quant.errors import MqValueError
+
+    model = mock_risk_model(mocker)
+    # The mock should never be reached — we want the error to fire first
+    mocker.patch.object(GsSession.current.sync, 'post', side_effect=AssertionError("network call should not happen"))
+
+    with pytest.raises(MqValueError, match="predictedBeta"):
+        model.update_partial_data(
+            dt.date(2023, 4, 14),
+            {'assetData': {'universe': ['A', 'B'], 'predictedBeta': [1.0]}},  # length 1 vs universe 2
+        )
+
+
+def test_update_partial_data_raises_no_existing_data(mocker):
+    """Raises MqRequestError(404) when the model has no data on the given date."""
+    from gs_quant.errors import MqRequestError
+
+    model = mock_risk_model(mocker)
+    # Data fetch returns empty results — date has no data
+    mocker.patch.object(GsSession.current.sync, 'post', return_value={'results': []})
+
+    with pytest.raises(MqRequestError) as exc_info:
+        model.update_partial_data(
+            dt.date(2023, 4, 14),
+            {'assetData': {'universe': ['asset1'], 'predictedBeta': [1.0]}},
+        )
+    assert exc_info.value.status == 404
 
 
 if __name__ == "__main__":
