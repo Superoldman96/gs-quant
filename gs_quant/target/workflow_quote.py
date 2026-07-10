@@ -75,6 +75,8 @@ class OverlayType(EnumBase, Enum):
     MicroEvents = 'MicroEvents'
     EarlyExercise = 'EarlyExercise'
     Gamma = 'Gamma'
+    Volatility = 'Volatility'
+    VolatilityDistribution = 'VolatilityDistribution'
     CentralBankProjectedRates = 'CentralBankProjectedRates'
     _None = 'None'    
 
