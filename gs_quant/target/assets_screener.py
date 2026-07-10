@@ -85,7 +85,7 @@ class AssetScreenerCreditResponseItem(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class AssetScreenerCreditResponse(Base):
     total_results: int = field(default=None, metadata=field_metadata)
-    results: Optional[Tuple[AssetScreenerCreditResponseItem, ...]] = field(default=None, metadata=field_metadata)
+    results: Optional[tuple[AssetScreenerCreditResponseItem, ...]] = field(default=None, metadata=field_metadata)
     scroll_id: Optional[str] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 

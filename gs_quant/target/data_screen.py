@@ -37,4 +37,4 @@ class AnalyticsScreen(Base):
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
     description: Optional[str] = field(default=None, metadata=field_metadata)
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
-    hidden_columns: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    hidden_columns: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)

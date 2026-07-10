@@ -121,7 +121,7 @@ class PriceableImpl(Priceable, ABC):
                         row['value'] if row['permissions'] == 'Granted' else 'redacted',
                     )
 
-                return {coord: val for coord, val in this_result.apply(process_row, axis=1).items()}
+                return {coord: val for coord, val in this_result.apply(process_row, axis=1)}
 
             if is_historical:
                 return {

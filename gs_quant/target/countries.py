@@ -44,12 +44,14 @@ class Country(Base):
     sub_region: str = field(default=None, metadata=field_metadata)
     region_code: str = field(default=None, metadata=field_metadata)
     sub_region_code: str = field(default=None, metadata=field_metadata)
+    active: Optional[bool] = field(default=None, metadata=field_metadata)
     created_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     last_updated_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     created_by_id: Optional[str] = field(default=None, metadata=field_metadata)
     last_updated_by_id: Optional[str] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
 
 
 @handle_camel_case_args

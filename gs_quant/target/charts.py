@@ -182,7 +182,7 @@ class ChartProperties(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ChartShare(Base):
-    guids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    guids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     version: Optional[int] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
@@ -193,6 +193,8 @@ class ChartShare(Base):
 class ChartTime(Base):
     start: Optional[str] = field(default=None, metadata=field_metadata)
     end: Optional[str] = field(default=None, metadata=field_metadata)
+    relative_start: Optional[str] = field(default=None, metadata=field_metadata)
+    relative_end: Optional[str] = field(default=None, metadata=field_metadata)
     timezone: Optional[str] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
@@ -202,7 +204,7 @@ class ChartTime(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class ParameterField(Base):
     field_: str = field(default=None, metadata=config(field_name='field', exclude=exclude_none))
-    values: Tuple[str, ...] = field(default=None, metadata=field_metadata)
+    values: tuple[str, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -215,6 +217,8 @@ class XAxisSettings(Base):
     show_grid_lines: Optional[bool] = field(default=None, metadata=field_metadata)
     ignore_nil_date: Optional[bool] = field(default=None, metadata=field_metadata)
     x_axis_date_format: Optional[str] = field(default=None, metadata=field_metadata)
+    decimal_precision: Optional[int] = field(default=None, metadata=field_metadata)
+    label_format: Optional[str] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -232,6 +236,7 @@ class YAxisSettings(Base):
     hide: Optional[bool] = field(default=None, metadata=field_metadata)
     invert_axis: Optional[bool] = field(default=None, metadata=field_metadata)
     show_label: Optional[bool] = field(default=None, metadata=field_metadata)
+    is_enable_gradient_coloring: Optional[bool] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -266,6 +271,9 @@ class ChartAnnotation(Base):
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
+ChartControls = dict
+
+
 @handle_camel_case_args
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
@@ -289,6 +297,7 @@ class ChartExpression(Base):
     x_label: Optional[str] = field(default=None, metadata=field_metadata)
     y_label: Optional[str] = field(default=None, metadata=field_metadata)
     default_gradient: Optional[bool] = field(default=None, metadata=field_metadata)
+    hide_last_value_label: Optional[bool] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -311,8 +320,8 @@ class ChartRegression(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class ConstructorParameter(Base):
     type_: str = field(default=None, metadata=config(field_name='type', exclude=exclude_none))
-    values: Optional[Tuple[ParameterField, ...]] = field(default=None, metadata=field_metadata)
-    options: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    values: Optional[tuple[ParameterField, ...]] = field(default=None, metadata=field_metadata)
+    options: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -347,11 +356,11 @@ class Chart(Base):
     rank: Optional[int] = field(default=None, metadata=field_metadata)
     folder_name: Optional[str] = field(default=None, metadata=field_metadata)
     description: Optional[str] = field(default=None, metadata=field_metadata)
-    description_history: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    expressions: Optional[Tuple[ChartExpression, ...]] = field(default=None, metadata=field_metadata)
+    description_history: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    expressions: Optional[tuple[ChartExpression, ...]] = field(default=None, metadata=field_metadata)
     chart_type: Optional[ChartType] = field(default=None, metadata=field_metadata)
-    chart_properties: Optional[Tuple[ChartProperties, ...]] = field(default=None, metadata=field_metadata)
-    regression_properties: Optional[Tuple[ChartRegression, ...]] = field(default=None, metadata=field_metadata)
+    chart_properties: Optional[tuple[ChartProperties, ...]] = field(default=None, metadata=field_metadata)
+    regression_properties: Optional[tuple[ChartRegression, ...]] = field(default=None, metadata=field_metadata)
     real_time: Optional[bool] = field(default=None, metadata=field_metadata)
     conversation_id: Optional[str] = field(default=None, metadata=field_metadata)
     show_controls_toolbar: Optional[bool] = field(default=None, metadata=field_metadata)
@@ -362,20 +371,22 @@ class Chart(Base):
     end_date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     start_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     end_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
-    tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    auto_tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    auto_tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     show_statistics: Optional[bool] = field(default=None, metadata=field_metadata)
     copy_from_id: Optional[str] = field(default=None, metadata=field_metadata)
+    style_id: Optional[str] = field(default=None, metadata=field_metadata)
     version: Optional[int] = field(default=None, metadata=field_metadata)
     draft_view_id: Optional[str] = field(default=None, metadata=field_metadata)
     label_settings: Optional[ChartLabelSettings] = field(default=None, metadata=field_metadata)
     time_settings: Optional[ChartTime] = field(default=None, metadata=field_metadata)
     x_axis_settings: Optional[XAxisSettings] = field(default=None, metadata=field_metadata)
     display_settings: Optional[ChartDisplaySettings] = field(default=None, metadata=field_metadata)
-    y_axes_settings: Optional[Tuple[YAxisSettings, ...]] = field(default=None, metadata=field_metadata)
-    annotations: Optional[Tuple[ChartAnnotation, ...]] = field(default=None, metadata=field_metadata)
+    y_axes_settings: Optional[tuple[YAxisSettings, ...]] = field(default=None, metadata=field_metadata)
+    y_axes_settings_bar: Optional[tuple[YAxisSettings, ...]] = field(default=None, metadata=field_metadata)
+    annotations: Optional[tuple[ChartAnnotation, ...]] = field(default=None, metadata=field_metadata)
     template_variables: Optional[DictBase] = field(default=None, metadata=field_metadata)
-    parameters: Optional[dict] = field(default=None, metadata=field_metadata)
+    parameters: Optional[ChartControls] = field(default=None, metadata=field_metadata)
     controls: Optional[Tuple[Union[dict, bool, float, str], ...]] = field(default=None, metadata=field_metadata)
     ai: Optional[str] = field(default=None, metadata=field_metadata)
     ai_user_prompt: Optional[str] = field(default=None, metadata=field_metadata)

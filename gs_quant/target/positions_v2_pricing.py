@@ -31,6 +31,7 @@ class PositionsPricingParameters(Base):
     carryover_positions_for_missing_dates: Optional[bool] = field(default=False, metadata=field_metadata)
     should_reweight: Optional[bool] = field(default=False, metadata=field_metadata)
     allow_fractional_shares: Optional[bool] = field(default=True, metadata=field_metadata)
+    use_spot_price: Optional[bool] = field(default=False, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -39,5 +40,5 @@ class PositionsPricingParameters(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class PositionsPricingRequest(Base):
     parameters: PositionsPricingParameters = field(default=None, metadata=field_metadata)
-    position_sets: Tuple[PositionSetRequest, ...] = field(default=None, metadata=field_metadata)
+    position_sets: tuple[PositionSetRequest, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)

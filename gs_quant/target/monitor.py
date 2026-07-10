@@ -143,8 +143,7 @@ class ColumnProperty(Base):
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
-class FieldMap(DictBase):
-    pass
+FieldMap = dict
 
 
 @handle_camel_case_args
@@ -208,7 +207,7 @@ class ColumnMappings(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ColumnOperation(Base):
-    column_names: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    column_names: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     function_name: Optional[str] = field(default=None, metadata=field_metadata)
     type_: Optional[str] = field(default=None, metadata=config(field_name='type', exclude=exclude_none))
     parameters: Optional[FieldMap] = field(default=None, metadata=field_metadata)
@@ -219,9 +218,9 @@ class ColumnOperation(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ExportParameters(Base):
-    tokens: Tuple[str, ...] = field(default=None, metadata=field_metadata)
+    tokens: tuple[str, ...] = field(default=None, metadata=field_metadata)
     data_set_id: Optional[str] = field(default=None, metadata=field_metadata)
-    fields: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    fields: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     label: Optional[str] = field(default=None, metadata=field_metadata)
     start_date: Optional[str] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
@@ -239,7 +238,7 @@ class Function(Base):
     start_time: Optional[str] = field(default=None, metadata=field_metadata)
     end_time: Optional[str] = field(default=None, metadata=field_metadata)
     should_use_search_until: Optional[bool] = field(default=None, metadata=field_metadata)
-    fields: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    fields: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     parameters: Optional[FieldMap] = field(default=None, metadata=field_metadata)
     where: Optional[FieldMap] = field(default=None, metadata=field_metadata)
     vendor: Optional[str] = field(default=None, metadata=field_metadata)
@@ -295,13 +294,13 @@ class ColumnDefinition(Base):
     column_property: Optional[ColumnProperty] = field(default=None, metadata=field_metadata)
     column_operation: Optional[ColumnOperation] = field(default=None, metadata=field_metadata)
     expression: Optional[str] = field(default=None, metadata=field_metadata)
-    expressions: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    expressions: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     start_date: Optional[str] = field(default=None, metadata=field_metadata)
     end_date: Optional[str] = field(default=None, metadata=field_metadata)
     tooltip: Optional[str] = field(default=None, metadata=field_metadata)
     parent_column_name: Optional[str] = field(default=None, metadata=field_metadata)
     primary: Optional[bool] = field(default=None, metadata=field_metadata)
-    pivots: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    pivots: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     disable_cell_tooltips: Optional[bool] = field(default=None, metadata=field_metadata)
 
 
@@ -310,7 +309,7 @@ class ColumnDefinition(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class EntityId(Base):
     id_: Optional[str] = field(default=None, metadata=config(field_name='id', exclude=exclude_none))
-    column_mappings: Optional[Tuple[ColumnMappings, ...]] = field(default=None, metadata=field_metadata)
+    column_mappings: Optional[tuple[ColumnMappings, ...]] = field(default=None, metadata=field_metadata)
     color: Optional[str] = field(default=None, metadata=field_metadata)
     route_url: Optional[str] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
@@ -322,7 +321,7 @@ class EntityId(Base):
 class RatesResponseData(Base):
     name: RateIds = field(default=None, metadata=field_metadata)
     id_: str = field(default=None, metadata=config(field_name='id', exclude=exclude_none))
-    rows: Tuple[RateRow, ...] = field(default=None, metadata=field_metadata)
+    rows: tuple[RateRow, ...] = field(default=None, metadata=field_metadata)
     libor_id: Optional[str] = field(default=None, metadata=config(field_name='libor_id', exclude=exclude_none))
 
 
@@ -331,7 +330,7 @@ class RatesResponseData(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class RowGroup(Base):
     name: str = field(default=None, metadata=field_metadata)
-    entity_ids: Tuple[EntityId, ...] = field(default=None, metadata=field_metadata)
+    entity_ids: tuple[EntityId, ...] = field(default=None, metadata=field_metadata)
     movers: Optional[Movers] = field(default=None, metadata=field_metadata)
     sort: Optional[Sort] = field(default=None, metadata=field_metadata)
     export: Optional[ExportParameters] = field(default=None, metadata=field_metadata)
@@ -341,8 +340,8 @@ class RowGroup(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class MonitorParameters(Base):
-    column_definitions: Tuple[ColumnDefinition, ...] = field(default=None, metadata=field_metadata)
-    row_groups: Tuple[RowGroup, ...] = field(default=None, metadata=field_metadata)
+    column_definitions: tuple[ColumnDefinition, ...] = field(default=None, metadata=field_metadata)
+    row_groups: tuple[RowGroup, ...] = field(default=None, metadata=field_metadata)
     export: Optional[ExportParameters] = field(default=None, metadata=field_metadata)
     ignore_business_day_logic: Optional[bool] = field(default=None, metadata=field_metadata)
     horizontal_scroll: Optional[bool] = field(default=None, metadata=field_metadata)
@@ -368,4 +367,6 @@ class Monitor(Base):
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
     folder_name: Optional[str] = field(default=None, metadata=field_metadata)
     polling_time: Optional[float] = field(default=None, metadata=field_metadata)
-    tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    show_staleness_indicator: Optional[bool] = field(default=None, metadata=field_metadata)
+    staleness_threshold: Optional[float] = field(default=None, metadata=field_metadata)

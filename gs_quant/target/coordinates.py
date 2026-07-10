@@ -36,7 +36,7 @@ class MDAPIQueryField(EnumBase, Enum):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class MDAPIDataQuery(Base):
-    market_data_coordinates: Tuple[MarketDataCoordinate, ...] = field(default=None, metadata=field_metadata)
+    market_data_coordinates: tuple[MarketDataCoordinate, ...] = field(default=None, metadata=field_metadata)
     format_: Optional[Format] = field(default=None, metadata=config(field_name='format', exclude=exclude_none))
     pricing_location: Optional[PricingLocation] = field(default=None, metadata=field_metadata)
     selector_function: Optional[str] = field(default=None, metadata=field_metadata)
@@ -48,7 +48,7 @@ class MDAPIDataQuery(Base):
     start_date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     end_date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     real_time: Optional[bool] = field(default=True, metadata=field_metadata)
-    fields: Optional[Tuple[MDAPIQueryField, ...]] = field(default=None, metadata=field_metadata)
+    fields: Optional[tuple[MDAPIQueryField, ...]] = field(default=None, metadata=field_metadata)
     time_filter: Optional[TimeFilter] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
@@ -57,7 +57,7 @@ class MDAPIDataQuery(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class MDAPIDataQueryResponse(Base):
-    data: Optional[Tuple[FieldValueMap, ...]] = field(default=None, metadata=field_metadata)
+    data: Optional[tuple[FieldValueMap, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -66,5 +66,5 @@ class MDAPIDataQueryResponse(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class MDAPIDataBatchResponse(Base):
     request_id: Optional[str] = field(default=None, metadata=field_metadata)
-    responses: Optional[Tuple[MDAPIDataQueryResponse, ...]] = field(default=None, metadata=field_metadata)
+    responses: Optional[tuple[MDAPIDataQueryResponse, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)

@@ -73,11 +73,9 @@ class OverlayType(EnumBase, Enum):
     RealisedProbability = 'RealisedProbability'
     MacroEvents = 'MacroEvents'
     MicroEvents = 'MicroEvents'
-    Gamma = 'Gamma'
-    Volatility = 'Volatility'
-    VolatilityDistribution = 'VolatilityDistribution'
     EarlyExercise = 'EarlyExercise'
-    CentralBankProjectedRates = "CentralBankProjectedRates"
+    Gamma = 'Gamma'
+    CentralBankProjectedRates = 'CentralBankProjectedRates'
     _None = 'None'    
 
 
@@ -89,7 +87,7 @@ class PriceFormat(EnumBase, Enum):
     Relative = 'Relative'
     Cents = 'Cents'
     Bps = 'Bps'
-    Percentage = 'Percentage'
+    Percentage = 'Percentage'    
 
 
 class RelativeExpiryType(EnumBase, Enum):    
@@ -120,8 +118,7 @@ class CustomDeltaHedge(HedgeTypes):
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
-class GenericResponse(DictBase):
-    pass
+GenericResponse = dict
 
 
 @handle_camel_case_args
@@ -223,8 +220,8 @@ class SolvingInfo(Base):
 class StrategyDescription(Base):
     strategy_type: Optional[str] = field(default=None, metadata=field_metadata)
     long_short: Optional[LongShort] = field(default=LongShort.Long, metadata=field_metadata)
-    assets: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    asset_classes: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    assets: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    asset_classes: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -233,8 +230,8 @@ class StrategyDescription(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class WorkflowEntitlements(Base):
     version: Optional[int] = field(default=None, metadata=field_metadata)
-    readers: Optional[Tuple[WorkflowEntitlement, ...]] = field(default=None, metadata=field_metadata)
-    writers: Optional[Tuple[WorkflowEntitlement, ...]] = field(default=None, metadata=field_metadata)
+    readers: Optional[tuple[WorkflowEntitlement, ...]] = field(default=None, metadata=field_metadata)
+    writers: Optional[tuple[WorkflowEntitlement, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -245,7 +242,7 @@ class MarketDataParameters(Base):
     max_history: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     timestamp: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     spot_ref: Optional[float] = field(default=None, metadata=field_metadata)
-    mkt_ref_override: Optional[Tuple[MarketRefOverride, ...]] = field(default=None, metadata=field_metadata)
+    mkt_ref_override: Optional[tuple[MarketRefOverride, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -261,7 +258,7 @@ class VisualStructuringReport(QuoteReport):
     overlay_parameters: Optional[OverlayParameters] = field(default=None, metadata=field_metadata)
     solving_info: Optional[SolvingInfo] = field(default=None, metadata=field_metadata)
     charting_parameters: Optional[ChartingParameters] = field(default=None, metadata=field_metadata)
-    comments: Optional[Tuple[CustomComments, ...]] = field(default=None, metadata=field_metadata)
+    comments: Optional[tuple[CustomComments, ...]] = field(default=None, metadata=field_metadata)
     strategy_description: Optional[StrategyDescription] = field(default=None, metadata=field_metadata)
     asset_class: Optional[str] = field(default=None, metadata=field_metadata)
     hedge_instruction: Optional[HedgeTypes] = field(default=None, metadata=field_metadata)
@@ -276,14 +273,14 @@ class VisualStructuringReport(QuoteReport):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class SaveQuoteRequest(Base):
-    positions: Tuple[PositionSet, ...] = field(default=None, metadata=field_metadata)
-    measures: Tuple[RiskMeasure, ...] = field(default=None, metadata=field_metadata)
-    pricing_and_market_data_as_of: Optional[Tuple[PricingDateAndMarketDataAsOf, ...]] = field(default=None, metadata=field_metadata)
+    positions: tuple[PositionSet, ...] = field(default=None, metadata=field_metadata)
+    measures: tuple[RiskMeasure, ...] = field(default=None, metadata=field_metadata)
+    pricing_and_market_data_as_of: Optional[tuple[PricingDateAndMarketDataAsOf, ...]] = field(default=None, metadata=field_metadata)
     pricing_location: Optional[PricingLocation] = field(default=None, metadata=field_metadata)
     scenario: Optional[MarketDataScenario] = field(default=None, metadata=field_metadata)
     parameters: Optional[RiskRequestParameters] = field(default=None, metadata=field_metadata)
-    reports: Optional[Tuple[QuoteReport, ...]] = field(default=None, metadata=field_metadata)
-    shared_users: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    reports: Optional[tuple[QuoteReport, ...]] = field(default=None, metadata=field_metadata)
+    shared_users: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     comments: Optional[str] = field(default=None, metadata=field_metadata)
     description: Optional[str] = field(default=None, metadata=field_metadata)
     original_workflow_id: Optional[str] = field(default=None, metadata=field_metadata)
@@ -297,8 +294,8 @@ class SaveQuoteRequest(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class WorkflowPosition(Base):
     id_: str = field(default=None, metadata=config(field_name='id', exclude=exclude_none))
-    position_sets: Optional[Tuple[PositionSet, ...]] = field(default=None, metadata=field_metadata)
-    reports: Optional[Tuple[QuoteReport, ...]] = field(default=None, metadata=field_metadata)
+    position_sets: Optional[tuple[PositionSet, ...]] = field(default=None, metadata=field_metadata)
+    reports: Optional[tuple[QuoteReport, ...]] = field(default=None, metadata=field_metadata)
     comments: Optional[str] = field(default=None, metadata=field_metadata)
     original_workflow_id: Optional[str] = field(default=None, metadata=field_metadata)
     description: Optional[str] = field(default=None, metadata=field_metadata)
@@ -313,5 +310,5 @@ class WorkflowPosition(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class WorkflowPositionsResponse(Base):
-    results: Optional[Tuple[WorkflowPosition, ...]] = field(default=None, metadata=field_metadata)
+    results: Optional[tuple[WorkflowPosition, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)

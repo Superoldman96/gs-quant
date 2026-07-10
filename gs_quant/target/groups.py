@@ -34,7 +34,7 @@ class GroupWithMembersCount(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class UpdateGroupMembershipRequest(Base):
-    user_ids: Tuple[str, ...] = field(default=None, metadata=field_metadata)
+    user_ids: tuple[str, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -53,9 +53,9 @@ class UserCoverage(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class GroupResponse(Base):
-    results: Tuple[GroupWithMembersCount, ...] = field(default=None, metadata=field_metadata)
+    results: tuple[GroupWithMembersCount, ...] = field(default=None, metadata=field_metadata)
     total_results: int = field(default=None, metadata=field_metadata)
-    scroll_id: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    scroll_id: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -69,7 +69,7 @@ class CreateGroupRequest(Base):
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
     oe_id: Optional[str] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
-    tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
 
 
 @handle_camel_case_args
@@ -81,7 +81,7 @@ class UpdateGroupRequest(Base):
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
     oe_id: Optional[str] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
-    tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
 
 
 @handle_camel_case_args
@@ -96,4 +96,4 @@ class Group(Base):
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
     oe_id: Optional[str] = field(default=None, metadata=field_metadata)
-    tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)

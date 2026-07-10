@@ -47,7 +47,7 @@ class ScreenerRow(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ScreenerData(Base):
-    rows: Optional[Tuple[DataRow, ...]] = field(default=None, metadata=field_metadata)
+    rows: Optional[tuple[DataRow, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -55,8 +55,8 @@ class ScreenerData(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ScreenerParameters(Base):
-    rows: Tuple[ScreenerRow, ...] = field(default=None, metadata=field_metadata)
-    columns: Tuple[ScreenerColumn, ...] = field(default=None, metadata=field_metadata)
+    rows: tuple[ScreenerRow, ...] = field(default=None, metadata=field_metadata)
+    columns: tuple[ScreenerColumn, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -74,4 +74,3 @@ class Screener(Base):
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
     description: Optional[str] = field(default=None, metadata=field_metadata)
     cron_schedule: Optional[str] = field(default=None, metadata=field_metadata)
-    entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)

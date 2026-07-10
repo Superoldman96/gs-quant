@@ -101,7 +101,8 @@ class RiskModelEventType(EnumBase, Enum):
     Risk_Model_ISC_Data = 'Risk Model ISC Data'
     Risk_Model_AWS = 'Risk Model AWS'
     Risk_Model_PFP_Data_AWS = 'Risk Model PFP Data AWS'
-    Risk_Model_ISC_Data_AWS = 'Risk Model ISC Data AWS'    
+    Risk_Model_ISC_Data_AWS = 'Risk Model ISC Data AWS'
+    Risk_Model_Rates_AWS = 'Risk Model Rates AWS'    
 
 
 class RiskModelLogicalDb(EnumBase, Enum):    
@@ -145,6 +146,11 @@ class RiskModelUniverseIdentifierRequest(EnumBase, Enum):
     ticker = 'ticker'
     primeId = 'primeId'
     isin = 'isin'
+    barraId = 'barraId'
+    axiomaId = 'axiomaId'
+    assetId = 'assetId'
+    secMasterId = 'secMasterId'    
+
 
 @handle_camel_case_args
 @dataclass_json(letter_case=LetterCase.CAMEL)
@@ -166,7 +172,7 @@ class Factor(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelCalendar(Base):
-    business_dates: Tuple[datetime.date, ...] = field(default=None, metadata=field_metadata)
+    business_dates: tuple[datetime.date, ...] = field(default=None, metadata=field_metadata)
     created_by_id: Optional[str] = field(default=None, metadata=field_metadata)
     created_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     last_updated_by_id: Optional[str] = field(default=None, metadata=field_metadata)
@@ -178,9 +184,9 @@ class RiskModelCalendar(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelCurrencyRatesData(Base):
-    currency: Tuple[str, ...] = field(default=None, metadata=field_metadata)
-    exchange_rate: Tuple[float, ...] = field(default=None, metadata=field_metadata)
-    risk_free_rate: Tuple[float, ...] = field(default=None, metadata=field_metadata)
+    currency: tuple[str, ...] = field(default=None, metadata=field_metadata)
+    exchange_rate: tuple[float, ...] = field(default=None, metadata=field_metadata)
+    risk_free_rate: tuple[float, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -201,7 +207,7 @@ class RiskModelFactorData(Base):
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
-RiskModelFactorExposure = Dict[str, float]
+RiskModelFactorExposure = dict[str, float]
 
 
 @handle_camel_case_args
@@ -209,7 +215,7 @@ RiskModelFactorExposure = Dict[str, float]
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelFactorPortfolio(Base):
     factor_id: str = field(default=None, metadata=field_metadata)
-    weights: Tuple[float, ...] = field(default=None, metadata=field_metadata)
+    weights: tuple[float, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -217,9 +223,9 @@ class RiskModelFactorPortfolio(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelIssuerSpecificCovarianceData(Base):
-    universe_id1: Tuple[str, ...] = field(default=None, metadata=field_metadata)
-    universe_id2: Tuple[str, ...] = field(default=None, metadata=field_metadata)
-    covariance: Tuple[float, ...] = field(default=None, metadata=field_metadata)
+    universe_id1: tuple[str, ...] = field(default=None, metadata=field_metadata)
+    universe_id2: tuple[str, ...] = field(default=None, metadata=field_metadata)
+    covariance: tuple[float, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -227,41 +233,41 @@ class RiskModelIssuerSpecificCovarianceData(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelAssetData(Base):
-    universe: Tuple[str, ...] = field(default=None, metadata=field_metadata)
-    specific_risk: Tuple[float, ...] = field(default=None, metadata=field_metadata)
-    factor_exposure: Tuple[RiskModelFactorExposure, ...] = field(default=None, metadata=field_metadata)
-    unadjusted_specific_risk: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    specific_return: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    daily_return: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    estimation_universe_weight: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    residual_variance: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    historical_beta: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    predicted_beta: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    global_predicted_beta: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    total_risk: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    bid_ask_spread: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    bid_ask_spread30d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    bid_ask_spread60d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    bid_ask_spread90d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    trading_volume: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    trading_volume30d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    trading_volume60d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    trading_volume90d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    traded_value30d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    composite_volume: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    composite_volume30d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    composite_volume60d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    composite_volume90d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    composite_value30d: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    issuer_market_cap: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    price: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    capitalization: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    currency: Optional[Tuple[Currency, ...]] = field(default=None, metadata=field_metadata)
-    dividend_yield: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    r_squared: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    fair_value_gap_percent: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    fair_value_gap_standard_deviation: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
-    model_price: Optional[Tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    universe: tuple[str, ...] = field(default=None, metadata=field_metadata)
+    specific_risk: tuple[float, ...] = field(default=None, metadata=field_metadata)
+    factor_exposure: tuple[RiskModelFactorExposure, ...] = field(default=None, metadata=field_metadata)
+    unadjusted_specific_risk: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    specific_return: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    daily_return: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    estimation_universe_weight: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    residual_variance: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    historical_beta: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    predicted_beta: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    global_predicted_beta: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    total_risk: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    bid_ask_spread: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    bid_ask_spread30d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    bid_ask_spread60d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    bid_ask_spread90d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    trading_volume: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    trading_volume30d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    trading_volume60d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    trading_volume90d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    traded_value30d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    composite_volume: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    composite_volume30d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    composite_volume60d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    composite_volume90d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    composite_value30d: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    issuer_market_cap: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    price: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    capitalization: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    currency: Optional[tuple[Currency, ...]] = field(default=None, metadata=field_metadata)
+    dividend_yield: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    r_squared: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    fair_value_gap_percent: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    fair_value_gap_standard_deviation: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
+    model_price: Optional[tuple[float, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -269,7 +275,7 @@ class RiskModelAssetData(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelCoverageRequest(Base):
-    asset_ids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    asset_ids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     portfolio_id: Optional[str] = field(default=None, metadata=field_metadata)
     as_of_date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     sort_by_term: Optional[RiskModelTerm] = field(default=None, metadata=field_metadata)
@@ -282,7 +288,7 @@ class RiskModelCoverageRequest(Base):
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelDataAssetsRequest(Base):
     identifier: RiskModelUniverseIdentifierRequest = field(default=None, metadata=field_metadata)
-    universe: Tuple[str, ...] = field(default=None, metadata=field_metadata)
+    universe: tuple[str, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -290,8 +296,8 @@ class RiskModelDataAssetsRequest(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelFactorPortfoliosData(Base):
-    universe: Tuple[str, ...] = field(default=None, metadata=field_metadata)
-    portfolio: Tuple[RiskModelFactorPortfolio, ...] = field(default=None, metadata=field_metadata)
+    universe: tuple[str, ...] = field(default=None, metadata=field_metadata)
+    portfolio: tuple[RiskModelFactorPortfolio, ...] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -316,6 +322,7 @@ class RiskModel(Base):
     expected_update_time: Optional[str] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
     universe_size: Optional[float] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
 
 
 @handle_camel_case_args
@@ -324,10 +331,10 @@ class RiskModel(Base):
 class RiskModelData(Base):
     date: datetime.date = field(default=None, metadata=field_metadata)
     asset_data: Optional[RiskModelAssetData] = field(default=None, metadata=field_metadata)
-    factor_data: Optional[Tuple[RiskModelFactorData, ...]] = field(default=None, metadata=field_metadata)
-    covariance_matrix: Optional[Tuple[Tuple[float, ...], ...]] = field(default=None, metadata=field_metadata)
-    pre_vra_covariance_matrix: Optional[Tuple[Tuple[float, ...], ...]] = field(default=None, metadata=config(field_name='preVRACovarianceMatrix', exclude=exclude_none))
-    unadjusted_covariance_matrix: Optional[Tuple[Tuple[float, ...], ...]] = field(default=None, metadata=field_metadata)
+    factor_data: Optional[tuple[RiskModelFactorData, ...]] = field(default=None, metadata=field_metadata)
+    covariance_matrix: Optional[tuple[tuple[float, ...], ...]] = field(default=None, metadata=field_metadata)
+    pre_vra_covariance_matrix: Optional[tuple[tuple[float, ...], ...]] = field(default=None, metadata=config(field_name='preVRACovarianceMatrix', exclude=exclude_none))
+    unadjusted_covariance_matrix: Optional[tuple[tuple[float, ...], ...]] = field(default=None, metadata=field_metadata)
     currency_rates_data: Optional[RiskModelCurrencyRatesData] = field(default=None, metadata=field_metadata)
     issuer_specific_covariance: Optional[RiskModelIssuerSpecificCovarianceData] = field(default=None, metadata=field_metadata)
     factor_portfolios: Optional[RiskModelFactorPortfoliosData] = field(default=None, metadata=field_metadata)
@@ -340,9 +347,9 @@ class RiskModelData(Base):
 class RiskModelDataRequest(Base):
     start_date: datetime.date = field(default=None, metadata=field_metadata)
     end_date: datetime.date = field(default=None, metadata=field_metadata)
-    measures: Tuple[RiskModelDataMeasure, ...] = field(default=None, metadata=field_metadata)
+    measures: tuple[RiskModelDataMeasure, ...] = field(default=None, metadata=field_metadata)
     assets: Optional[RiskModelDataAssetsRequest] = field(default=None, metadata=field_metadata)
-    factors: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    factors: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     limit_factors: Optional[bool] = field(default=True, metadata=field_metadata)
     base_currency_factor: Optional[str] = field(default=None, metadata=field_metadata)
     format_: Optional[Format] = field(default=Format.Json, metadata=config(field_name='format', exclude=exclude_none))
@@ -353,7 +360,7 @@ class RiskModelDataRequest(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class RiskModelDataResponse(Base):
-    results: Tuple[RiskModelData, ...] = field(default=None, metadata=field_metadata)
+    results: tuple[RiskModelData, ...] = field(default=None, metadata=field_metadata)
     total_results: int = field(default=None, metadata=field_metadata)
-    missing_dates: Optional[Tuple[datetime.date, ...]] = field(default=None, metadata=field_metadata)
+    missing_dates: Optional[tuple[datetime.date, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)

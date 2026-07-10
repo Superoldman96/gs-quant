@@ -18,6 +18,7 @@ import copy
 import inspect
 import pickle
 import sys
+import types
 
 from gs_quant.base import Base
 from gs_quant.common import Currency
@@ -27,7 +28,11 @@ def classes(module_name) -> list:
     module_path = 'gs_quant.target.' + module_name
     __import__(module_path)
     module = sys.modules[module_path]
-    return [m for n, m in inspect.getmembers(module) if inspect.isclass(m) and issubclass(m, Base) and m is not Base]
+    return [
+        m
+        for n, m in inspect.getmembers(module)
+        if not isinstance(m, types.GenericAlias) and inspect.isclass(m) and issubclass(m, Base) and m is not Base
+    ]
 
 
 def test_enum():

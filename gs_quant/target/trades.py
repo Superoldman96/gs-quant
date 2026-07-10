@@ -34,7 +34,6 @@ class MqexsAssetClass(EnumBase, Enum):
     Equity = 'Equity'
     Earon = 'Earon'
     FICC = 'FICC'
-    Prime = 'Prime'
     IOI = 'IOI'
     Rates = 'Rates'
     PCO = 'PCO'    
@@ -431,7 +430,9 @@ class MqexsPricingType(EnumBase, Enum):
     GstSwapRFQ = 'GstSwapRFQ'
     TradableStream = 'TradableStream'
     UnifiedRFQ = 'UnifiedRFQ'
-    PCORFQ = 'PCORFQ'    
+    PCORFQ = 'PCORFQ'
+    PCOTmtpRFQ = 'PCOTmtpRFQ'
+    PCOTmtpRFQSales = 'PCOTmtpRFQSales'    
 
 
 class MqexsSide(EnumBase, Enum):    
@@ -503,6 +504,6 @@ class MqexsTradeExt(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class MqexsTradesWErrorExt(Base):
-    trades: Optional[Tuple[MqexsTradeExt, ...]] = field(default=None, metadata=field_metadata)
-    errors: Optional[Tuple[MqexsErrorInfo, ...]] = field(default=None, metadata=field_metadata)
+    trades: Optional[tuple[MqexsTradeExt, ...]] = field(default=None, metadata=field_metadata)
+    errors: Optional[tuple[MqexsErrorInfo, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)

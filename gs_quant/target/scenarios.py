@@ -66,6 +66,7 @@ class PnlResult(Base):
     factor_exposure: Optional[float] = field(default=None, metadata=field_metadata)
     exposure: Optional[float] = field(default=None, metadata=field_metadata)
     factor_shock: Optional[float] = field(default=None, metadata=field_metadata)
+    factor_cross_sectional_standard_deviation: Optional[float] = field(default=None, metadata=field_metadata)
     by_asset: Optional[ByAssetPnlResult] = field(default=None, metadata=field_metadata)
 
 
@@ -86,9 +87,9 @@ class ScenarioResponse(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ScenarioCalculationResponse(Base):
-    scenarios: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    errored_scenarios: Optional[Tuple[ErroredScenario, ...]] = field(default=None, metadata=field_metadata)
-    results: Optional[Tuple[ScenarioResponse, ...]] = field(default=None, metadata=field_metadata)
+    scenarios: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    errored_scenarios: Optional[tuple[ErroredScenario, ...]] = field(default=None, metadata=field_metadata)
+    results: Optional[tuple[ScenarioResponse, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -96,7 +97,7 @@ class ScenarioCalculationResponse(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ScenarioCalculationAPIRequest(Base):
-    scenario_ids: Tuple[str, ...] = field(default=None, metadata=field_metadata)
+    scenario_ids: tuple[str, ...] = field(default=None, metadata=field_metadata)
     measures: tuple = field(default=None, metadata=field_metadata)
     date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     risk_model: Optional[str] = field(default=None, metadata=field_metadata)

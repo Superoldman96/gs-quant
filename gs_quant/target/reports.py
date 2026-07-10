@@ -122,7 +122,7 @@ class AumTimeseriesDataPoint(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class AumTimeseries(Base):
-    data: Optional[Tuple[AumTimeseriesDataPoint, ...]] = field(default=None, metadata=field_metadata)
+    data: Optional[tuple[AumTimeseriesDataPoint, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -150,7 +150,7 @@ class ReportGenerateRequest(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ReportRescheduleRequest(Base):
-    report_ids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    report_ids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -193,7 +193,7 @@ class Report(Base):
     id_: Optional[str] = field(default=None, metadata=config(field_name='id', exclude=exclude_none))
     last_updated_by_id: Optional[str] = field(default=None, metadata=field_metadata)
     last_updated_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
-    measures: Optional[Tuple[ReportMeasures, ...]] = field(default=None, metadata=field_metadata)
+    measures: Optional[tuple[ReportMeasures, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
     status: Optional[ReportStatus] = field(default=None, metadata=field_metadata)
@@ -206,8 +206,8 @@ class Report(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class ReportBatchScheduleRequest(Base):
-    reports: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    reports_with_parameters_overrides: Optional[Tuple[ReportWithParametersOverrides, ...]] = field(default=None, metadata=field_metadata)
+    reports: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    reports_with_parameters_overrides: Optional[tuple[ReportWithParametersOverrides, ...]] = field(default=None, metadata=field_metadata)
     time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     end_date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     use_close_date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
@@ -229,7 +229,7 @@ class ReportJob(Base):
     percentage_complete: Optional[float] = field(default=None, metadata=field_metadata)
     execution_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     id_: Optional[str] = field(default=None, metadata=config(field_name='id', exclude=exclude_none))
-    measures: Optional[Tuple[ReportMeasures, ...]] = field(default=None, metadata=field_metadata)
+    measures: Optional[tuple[ReportMeasures, ...]] = field(default=None, metadata=field_metadata)
     parameters: Optional[ReportParameters] = field(default=None, metadata=field_metadata)
     parent_id: Optional[str] = field(default=None, metadata=field_metadata)
     position_source_id: Optional[str] = field(default=None, metadata=field_metadata)
@@ -241,6 +241,6 @@ class ReportJob(Base):
     created_by_id: Optional[str] = field(default=None, metadata=field_metadata)
     created_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     last_updated_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
-    report_ids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    report_ids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     priority: Optional[ReportJobPriority] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)

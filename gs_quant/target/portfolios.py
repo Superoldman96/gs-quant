@@ -26,7 +26,7 @@ from enum import Enum
 from gs_quant.target.reports import Report
 
 
-class ActiveWeightType(EnumBase, Enum):    
+class ActiveWeightType(EnumBase, Enum):
     
     """Weight type used to calculate active holdings."""
 
@@ -55,7 +55,26 @@ class PortfolioType(EnumBase, Enum):
     Draft_Portfolio = 'Draft Portfolio'
     Draft_Bond = 'Draft Bond'
     PCO_Portfolio = 'PCO Portfolio'
-    PCO_Share_Class = 'PCO Share Class'    
+    PCO_Share_Class = 'PCO Share Class'
+    RIA_Portfolio = 'RIA Portfolio'    
+
+
+class PositionIngestionMethod(EnumBase, Enum):    
+    
+    """Specifies the method used by the position provider to ingest positions"""
+
+    FTP = 'FTP'
+    API_Upload = 'API Upload'
+    Manual_Entry = 'Manual Entry'    
+
+
+class PositionProviderType(EnumBase, Enum):    
+    
+    """Specifies the type of position provider"""
+
+    OMS = 'OMS'
+    External_Vendor = 'External Vendor'
+    End_User = 'End User'    
 
 
 class RefreshInterval(EnumBase, Enum):    
@@ -83,6 +102,29 @@ class RiskAumSource(EnumBase, Enum):
 @handle_camel_case_args
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
+class CreditPreTradePortfolioActiveReplacement(Base):
+    original_bond: str = field(default=None, metadata=field_metadata)
+    replacement_bond: str = field(default=None, metadata=field_metadata)
+    name: Optional[str] = field(default=None, metadata=name_metadata)
+
+
+@handle_camel_case_args
+@dataclass_json(letter_case=LetterCase.CAMEL)
+@dataclass(unsafe_hash=True, repr=False)
+class PCOSecurityLevelHedgingData(Base):
+    hedge_ccy: Optional[str] = field(default=None, metadata=config(field_name='hedgeCCY', exclude=exclude_none))
+    security_name: Optional[str] = field(default=None, metadata=field_metadata)
+    security_ccy: Optional[str] = field(default=None, metadata=config(field_name='securityCCY', exclude=exclude_none))
+    security_exposure: Optional[str] = field(default=None, metadata=field_metadata)
+    open_hedge_notional_in_hedging_ccy: Optional[str] = field(default=None, metadata=config(field_name='openHedgeNotionalInHedgingCCY', exclude=exclude_none))
+    exposure_in_hedging_ccy: Optional[str] = field(default=None, metadata=config(field_name='exposureInHedgingCCY', exclude=exclude_none))
+    weight: Optional[str] = field(default=None, metadata=field_metadata)
+    name: Optional[str] = field(default=None, metadata=name_metadata)
+
+
+@handle_camel_case_args
+@dataclass_json(letter_case=LetterCase.CAMEL)
+@dataclass(unsafe_hash=True, repr=False)
 class SecDbBookDetail(Base):
     book_id: Optional[str] = field(default=None, metadata=field_metadata)
     book_type: Optional[str] = field(default=None, metadata=field_metadata)
@@ -93,6 +135,7 @@ class SecDbBookDetail(Base):
 @dataclass_json(letter_case=LetterCase.CAMEL)
 @dataclass(unsafe_hash=True, repr=False)
 class CreditPreTradePortfolioParameters(Base):
+    active_replacements: Optional[tuple[CreditPreTradePortfolioActiveReplacement, ...]] = field(default=None, metadata=field_metadata)
     date: Optional[datetime.date] = field(default=None, metadata=field_metadata)
     currency: Optional[Currency] = field(default=None, metadata=field_metadata)
     reference_id: Optional[str] = field(default=None, metadata=field_metadata)
@@ -106,11 +149,11 @@ class GRDBPortfolioParameters(Base):
     oe_id: str = field(default=None, metadata=field_metadata)
     client_name: str = field(default=None, metadata=field_metadata)
     increment: str = field(default=None, metadata=field_metadata)
-    risk_packages: Tuple[str, ...] = field(default=None, metadata=field_metadata)
+    risk_packages: tuple[str, ...] = field(default=None, metadata=field_metadata)
     enabled: str = field(default=None, metadata=field_metadata)
     is_live: str = field(default=None, metadata=field_metadata)
-    client_account_names: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    oasis_account_names: Optional[Tuple[str, ...]] = field(default=None, metadata=config(field_name='OasisAccountNames', exclude=exclude_none))
+    client_account_names: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    oasis_account_names: Optional[tuple[str, ...]] = field(default=None, metadata=config(field_name='OasisAccountNames', exclude=exclude_none))
     client_position_filter: Optional[ClientPositionFilter] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
@@ -153,29 +196,32 @@ class PCOPortfolioParameters(Base):
     local_currency: Optional[Currency] = field(default=None, metadata=field_metadata)
     fund_calendar: Optional[str] = field(default=None, metadata=field_metadata)
     calculation_currency: Optional[PCOCurrencyType] = field(default=None, metadata=field_metadata)
-    hedge_settlement_interval: Optional[Tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
-    hedge_settlement_day: Optional[Tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
-    roll_horizon: Optional[Tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
-    pnl_currency: Optional[Tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
-    nav_publication_period: Optional[Tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
+    hedge_settlement_interval: Optional[tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
+    hedge_settlement_day: Optional[tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
+    roll_horizon: Optional[tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
+    roll_split_days: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    pnl_currency: Optional[tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
+    nav_publication_period: Optional[tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
     roll_date_zero_threshold: Optional[bool] = field(default=None, metadata=field_metadata)
     unrealised_mark_to_market: Optional[PCOUnrealisedMarkToMarket] = field(default=None, metadata=field_metadata)
-    target_deviation: Optional[Tuple[PCOTargetDeviation, ...]] = field(default=None, metadata=field_metadata)
-    cash_balances: Optional[Tuple[PCOCashBalance, ...]] = field(default=None, metadata=field_metadata)
+    target_deviation: Optional[tuple[PCOTargetDeviation, ...]] = field(default=None, metadata=field_metadata)
+    cash_balances: Optional[tuple[PCOCashBalance, ...]] = field(default=None, metadata=field_metadata)
     exposure: Optional[PCOExposure] = field(default=None, metadata=field_metadata)
     pco_share_class: Optional[PCOShareClass] = field(default=None, metadata=field_metadata)
-    settlements: Optional[Tuple[PCOSettlements, ...]] = field(default=None, metadata=field_metadata)
+    settlements: Optional[tuple[PCOSettlements, ...]] = field(default=None, metadata=field_metadata)
     show_cash: Optional[bool] = field(default=None, metadata=field_metadata)
     show_exposure: Optional[bool] = field(default=None, metadata=field_metadata)
     enable_rfq: Optional[bool] = field(default=None, metadata=config(field_name='enableRFQ', exclude=exclude_none))
-    fixing_descriptions: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    ccys_enabled_for_deliverable: Optional[tuple[Currency, ...]] = field(default=None, metadata=field_metadata)
+    fixing_descriptions: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     pco_origin: Optional[PCOOrigin] = field(default=None, metadata=field_metadata)
     version: Optional[str] = field(default=None, metadata=field_metadata)
-    trades: Optional[Tuple[PCOTrade, ...]] = field(default=None, metadata=field_metadata)
+    trades: Optional[tuple[PCOTrade, ...]] = field(default=None, metadata=field_metadata)
     investment_ratio: Optional[str] = field(default=None, metadata=field_metadata)
-    roll_currency: Optional[Tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
+    roll_currency: Optional[tuple[PCOParameterValues, ...]] = field(default=None, metadata=field_metadata)
     param_version: Optional[str] = field(default=None, metadata=field_metadata)
     security_breakdown: Optional[PCOSecurityBreakdown] = field(default=None, metadata=field_metadata)
+    security_level_hedging_data: Optional[tuple[PCOSecurityLevelHedgingData, ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
 
 
@@ -191,19 +237,19 @@ class Portfolio(Base):
     description: Optional[str] = field(default=None, metadata=field_metadata)
     entitlements: Optional[Entitlements] = field(default=None, metadata=field_metadata)
     entitlement_exclusions: Optional[EntitlementExclusions] = field(default=None, metadata=field_metadata)
-    identifiers: Optional[Tuple[Identifier, ...]] = field(default=None, metadata=field_metadata)
+    identifiers: Optional[tuple[Identifier, ...]] = field(default=None, metadata=field_metadata)
     last_updated_by_id: Optional[str] = field(default=None, metadata=field_metadata)
     last_updated_time: Optional[datetime.datetime] = field(default=None, metadata=field_metadata)
     owner_id: Optional[str] = field(default=None, metadata=field_metadata)
-    report_ids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    scenario_ids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    report_ids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    scenario_ids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     short_name: Optional[str] = field(default=None, metadata=field_metadata)
-    underlying_portfolio_ids: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
-    tags: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    underlying_portfolio_ids: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tags: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
     type_: Optional[PortfolioType] = field(default=None, metadata=config(field_name='type', exclude=exclude_none))
-    parameters: Optional[Union[CreditPreTradePortfolioParameters, GRDBPortfolioParameters, LiquidityRequest, PCOPortfolioParameters, TemporalPortfolioParameters, Tuple[SecDbBookDetail, ...]]] = field(default=None, metadata=field_metadata)
+    parameters: Optional[Union[CreditPreTradePortfolioParameters, GRDBPortfolioParameters, LiquidityRequest, PCOPortfolioParameters, TemporalPortfolioParameters, tuple[SecDbBookDetail, ...]]] = field(default=None, metadata=field_metadata)
     aum_source: Optional[RiskAumSource] = field(default=None, metadata=field_metadata)
-    tag_name_hierarchy: Optional[Tuple[str, ...]] = field(default=None, metadata=field_metadata)
+    tag_name_hierarchy: Optional[tuple[str, ...]] = field(default=None, metadata=field_metadata)
 
 
 @handle_camel_case_args
@@ -213,8 +259,8 @@ class PortfolioTree(Base):
     tag_name: Optional[str] = field(default=None, metadata=field_metadata)
     tag_value: Optional[str] = field(default=None, metadata=field_metadata)
     leaf_tag_name: Optional[str] = field(default=None, metadata=field_metadata)
-    reports: Optional[Tuple[Report, ...]] = field(default=None, metadata=field_metadata)
+    reports: Optional[tuple[Report, ...]] = field(default=None, metadata=field_metadata)
     # Using forward reference via string instead of Lazy annotations because latter doesn't work very well with
     # dataclasses - https://bugs.python.org/issue39442
-    sub_portfolios: Optional[Tuple['PortfolioTree', ...]] = field(default=None, metadata=field_metadata)
+    sub_portfolios: Optional[tuple['PortfolioTree', ...]] = field(default=None, metadata=field_metadata)
     name: Optional[str] = field(default=None, metadata=name_metadata)
