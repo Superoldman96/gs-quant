@@ -14,11 +14,21 @@ specific language governing permissions and limitations
 under the License.
 """
 
-import threading
+from contextvars import ContextVar
 
 from gs_quant.errors import MqUninitialisedError, MqValueError
 
-thread_local = threading.local()
+_context_vars: dict = {}
+_entered_instances: ContextVar = ContextVar('_entered_instances', default=frozenset())
+
+
+def _get_context_var(key: str) -> ContextVar:
+    try:
+        return _context_vars[key]
+    except KeyError:
+        var = ContextVar(key)
+        _context_vars[key] = var
+        return var
 
 
 class ContextMeta(type):
@@ -36,7 +46,7 @@ class ContextMeta(type):
 
     @property
     def path(cls) -> tuple:
-        return getattr(thread_local, cls.__path_key, ())
+        return _get_context_var(cls.__path_key).get(())
 
     @property
     def current(cls):
@@ -64,7 +74,7 @@ class ContextMeta(type):
             except AttributeError:
                 pass
 
-        setattr(thread_local, cls.__path_key, (current,))
+        _get_context_var(cls.__path_key).set((current,))
 
     @property
     def current_is_set(cls) -> bool:
@@ -72,11 +82,11 @@ class ContextMeta(type):
 
     @property
     def __default(cls):
-        default = getattr(thread_local, cls.__default_key, None)
+        default = _get_context_var(cls.__default_key).get(None)
         if default is None:
             default = cls.default_value()
             if default is not None:
-                setattr(thread_local, cls.__default_key, default)
+                _get_context_var(cls.__default_key).set(default)
 
         return default
 
@@ -94,18 +104,18 @@ class ContextMeta(type):
         return len(path) >= 2
 
     def push(cls, context):
-        setattr(thread_local, cls.__path_key, (context,) + cls.path)
+        _get_context_var(cls.__path_key).set((context,) + cls.path)
 
     def pop(cls):
         path = cls.path
-        setattr(thread_local, cls.__path_key, path[1:])
+        _get_context_var(cls.__path_key).set(path[1:])
         return path[0]
 
 
 class ContextBase(metaclass=ContextMeta):
     def __enter__(self):
         self._cls.push(self)
-        setattr(thread_local, self.__entered_key, True)
+        _entered_instances.set(_entered_instances.get() | {id(self)})
         self._on_enter()
         return self
 
@@ -114,11 +124,11 @@ class ContextBase(metaclass=ContextMeta):
             self._on_exit(exc_type, exc_val, exc_tb)
         finally:
             self._cls.pop()
-            setattr(thread_local, self.__entered_key, False)
+            _entered_instances.set(_entered_instances.get() - {id(self)})
 
     async def __aenter__(self):
         self._cls.push(self)
-        setattr(thread_local, self.__entered_key, True)
+        _entered_instances.set(_entered_instances.get() | {id(self)})
         await self._on_aenter()
         return self
 
@@ -127,11 +137,7 @@ class ContextBase(metaclass=ContextMeta):
             await self._on_aexit(exc_type, exc_val, exc_tb)
         finally:
             self._cls.pop()
-            setattr(thread_local, self.__entered_key, False)
-
-    @property
-    def __entered_key(self) -> str:
-        return '{}_entered'.format(id(self))
+            _entered_instances.set(_entered_instances.get() - {id(self)})
 
     @property
     def _cls(self) -> ContextMeta:
@@ -153,7 +159,7 @@ class ContextBase(metaclass=ContextMeta):
 
     @property
     def is_entered(self) -> bool:
-        return getattr(thread_local, self.__entered_key, False)
+        return id(self) in _entered_instances.get()
 
     def _on_enter(self):
         pass

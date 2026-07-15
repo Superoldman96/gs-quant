@@ -79,8 +79,33 @@ class GsGroupsApi:
         GsSession.current.sync.delete(f'/groups/{group_id}')
 
     @classmethod
-    def get_users_in_group(cls, group_id: str) -> List:
-        return GsSession.current.sync.get(f'/groups/{group_id}/users').get('users', [])
+    def get_users_in_group(
+        cls,
+        group_id: str,
+        fields: List[str] = None,
+        limit: int = None,
+        offset: int = None,
+        order_by: List[str] = None,
+        show_members_count: bool = None,
+        scroll_id: str = None,
+        scroll_time: str = None,
+    ) -> List:
+        url = f'/groups/{group_id}/users?'
+        if fields:
+            url += f'&fields={"&fields=".join(fields)}'
+        if limit is not None:
+            url += f'&limit={limit}'
+        if offset is not None:
+            url += f'&offset={offset}'
+        if order_by:
+            url += f'&orderBy={"&orderBy=".join(order_by)}'
+        if show_members_count is not None:
+            url += f'&showMembersCount={str(show_members_count).lower()}'
+        if scroll_id:
+            url += f'&scrollId={scroll_id}'
+        if scroll_time:
+            url += f'&scrollTime={scroll_time}'
+        return GsSession.current.sync.get(url).get('users', [])
 
     @classmethod
     def add_users_to_group(cls, group_id: str, user_ids: List[str]):

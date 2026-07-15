@@ -385,13 +385,20 @@ class GsSession(ContextBase):
 
     def _on_enter(self):
         self.__close_on_exit = self._session is None
+        self.__close_on_exit_async = not self._has_async_session()
         if not self._session:
             self.init()
 
     def _on_exit(self, exc_type, exc_val, exc_tb):
+        if self.__close_on_exit_async:
+            if self._has_async_session():
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._close_async())
+                except RuntimeError:
+                    asyncio.run(self._close_async())
         if self.__close_on_exit:
             self._session = None
-            self._session_async = None
 
     def _has_async_session(self) -> bool:
         return self._session_async and not self._session_async.is_closed
@@ -445,19 +452,18 @@ class GsSession(ContextBase):
             if self.http_adapter is None:
                 self._session.close()
             self._session = None
-        if self._session_async:
+        if self._has_async_session():
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:
                 loop = None
-            try:
-                if loop and loop.is_running():
-                    # We're inside a running event loop — schedule the close without blocking
-                    loop.create_task(self._close_async())
-                else:
+            if loop and loop.is_running():
+                loop.create_task(self._close_async())
+            else:
+                try:
                     asyncio.run(self._close_async())
-            except Exception:
-                pass
+                except RuntimeError:
+                    pass
 
     async def _close_async(self):
         if self._session_async:
@@ -465,7 +471,10 @@ class GsSession(ContextBase):
             self._session_async = None
 
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
 
     @staticmethod
     def __unpack(results: Union[dict, list], cls: type) -> Union[Base, tuple, dict]:

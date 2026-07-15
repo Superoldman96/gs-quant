@@ -37,7 +37,7 @@ def test_cpn_swap(mocker):
     df_500 = pd.DataFrame({'price3pmClose': [100.5, 101.0]}, index=_index)
     df_450 = pd.DataFrame({'price3pmClose': [99.0, 99.5]}, index=_index)
 
-    def _get_data_side_effect(fields=None, name=None):
+    def _get_data_side_effect(fields=None, name=None, **kwargs):
         if name == 'FNM 4.50':
             return df_450
         elif name == 'FNM 5.00':
@@ -70,7 +70,7 @@ def test_cpn_swap_float_coupon(mocker):
     df_550 = pd.DataFrame({'price3pmClose': [102.0]}, index=[_index[0]])
     df_500 = pd.DataFrame({'price3pmClose': [100.0]}, index=[_index[0]])
 
-    def _get_data_side_effect(fields=None, name=None):
+    def _get_data_side_effect(fields=None, name=None, **kwargs):
         if name == 'FNM 5.00':
             return df_500
         elif name == 'FNM 5.50':
@@ -108,7 +108,7 @@ def test_butterfly(mocker):
     df_500 = pd.DataFrame({'price3pmClose': [100.5, 101.0]}, index=_index)
     df_550 = pd.DataFrame({'price3pmClose': [101.0, 101.5]}, index=_index)
 
-    def _get_data_side_effect(fields=None, name=None):
+    def _get_data_side_effect(fields=None, name=None, **kwargs):
         if name == 'FNM 4.50':
             return df_450
         elif name == 'FNM 5.00':
@@ -145,7 +145,7 @@ def test_butterfly_different_asset(mocker):
     df_300 = pd.DataFrame({'price3pmClose': [98.0]}, index=[_index[0]])
     df_350 = pd.DataFrame({'price3pmClose': [99.5]}, index=[_index[0]])
 
-    def _get_data_side_effect(fields=None, name=None):
+    def _get_data_side_effect(fields=None, name=None, **kwargs):
         if name == 'TSF 2.50':
             return df_250
         elif name == 'TSF 3.00':

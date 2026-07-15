@@ -22,7 +22,7 @@ import pandas as pd
 
 from gs_quant.api.gs.data import QueryType
 from gs_quant.common import AssetClass, AssetType
-from gs_quant.data import Dataset
+from gs_quant.data import Dataset, DataContext
 from gs_quant.errors import MqValueError
 from gs_quant.markets.securities import Asset, AssetIdentifier
 from gs_quant.session import GsSession, Environment
@@ -142,8 +142,10 @@ def _get_tba_prices(asset_name: str) -> pd.Series:
     :param asset_name: name of the TBA asset (e.g. 'FNM 5.00')
     :return: pd.Series indexed by date with price3pmClose values
     """
+    start, end = DataContext.current.start_date, DataContext.current.end_date
     ds = Dataset(_TBA_DATASET)
-    df = ds.get_data(fields=['price3pmClose'], name=asset_name)
+    df = ds.get_data(fields=['price3pmClose'], start=start, end=end, name=asset_name)
+
     if df.empty:
         return ExtendedSeries(dtype=float)
     return pd.Series(df['price3pmClose'].values, index=df.index)

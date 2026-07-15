@@ -1063,24 +1063,10 @@ class GsDataApi(DataApi):
         return providers
 
     @classmethod
-    def get_market_data(cls, query, request_id=None, ignore_errors: bool = False) -> pd.DataFrame:
-        with Tracer('GsDataApi.get_market_data') as scope:
-
-            def validate(body):
-                for e in body['responses']:
-                    container = e['queryResponse'][0]
-                    if 'errorMessages' in container:
-                        msg = f'measure service request {body["requestId"]} failed: {container["errorMessages"]}'
-                        raise MqValueError(msg)
-                return body
-
-            start = time.perf_counter()
-            try:
-                body = cls._post_with_cache_check(url='/data/measures', validator=validate, payload=query)
-            except Exception as e:
-                tag_error(scope)
-                log_warning(request_id, _logger, f'Market data query {query} failed due to {e}')
-                raise e
+    def _parse_market_data_response(
+        cls, body: dict, query, request_id, ignore_errors: bool, start: float, scope
+    ) -> pd.DataFrame:
+        if start is not None:
             log_debug(
                 request_id,
                 _logger,
@@ -1090,29 +1076,72 @@ class GsDataApi(DataApi):
                 (time.perf_counter() - start) * 1000,
             )
 
-            ids = []
-            parts = []
-            for e in body['responses']:
-                container = e['queryResponse'][0]
-                ids.extend(container.get('dataSetIds', ()))
-                if 'errorMessages' in container:
-                    msg = f'measure service request {body["requestId"]} failed: {container["errorMessages"]}'
-                    if ignore_errors:
-                        log_warning(request_id, _logger, msg)
-                    else:
-                        raise MqValueError(msg)
-                if 'response' in container:
-                    df = MarketDataResponseFrame(container['response']['data'])
-                    df = df.set_index('date' if 'date' in df.columns else 'time')
-                    df.index = pd.to_datetime(df.index)
-                    parts.append(df)
+        ids = []
+        parts = []
+        for e in body['responses']:
+            container = e['queryResponse'][0]
+            ids.extend(container.get('dataSetIds', ()))
+            if 'errorMessages' in container:
+                msg = f'measure service request {body["requestId"]} failed: {container["errorMessages"]}'
+                if ignore_errors:
+                    log_warning(request_id, _logger, msg)
+                else:
+                    raise MqValueError(msg)
+            if 'response' in container:
+                df = MarketDataResponseFrame(container['response']['data'])
+                df = df.set_index('date' if 'date' in df.columns else 'time')
+                df.index = pd.to_datetime(df.index)
+                parts.append(df)
 
-            log_debug(request_id, _logger, f'fetched data from {ids}')
-            df = pd.concat(parts) if len(parts) > 0 else MarketDataResponseFrame()
-            df.dataset_ids = tuple(ids)
-            tag_request_id(scope, body)
-            scope.span.set_tag('dataset_ids', str(ids))
-            tag_row_count(scope, df)
+        log_debug(request_id, _logger, f'fetched data from {ids}')
+        df = pd.concat(parts) if len(parts) > 0 else MarketDataResponseFrame()
+        df.dataset_ids = tuple(ids)
+        tag_request_id(scope, body)
+        scope.span.set_tag('dataset_ids', str(ids))
+        tag_row_count(scope, df)
+        return df
+
+    @classmethod
+    def _validate(cls, body):
+        for e in body['responses']:
+            container = e['queryResponse'][0]
+            if 'errorMessages' in container:
+                msg = f'measure service request {body["requestId"]} failed: {container["errorMessages"]}'
+                raise MqValueError(msg)
+        return body
+
+    @classmethod
+    def get_market_data(cls, query, request_id=None, ignore_errors: bool = False) -> pd.DataFrame:
+        with Tracer('GsDataApi.get_market_data') as scope:
+            start = time.perf_counter()
+            try:
+                body = cls._post_with_cache_check(url='/data/measures', validator=cls._validate, payload=query)
+            except Exception as e:
+                tag_error(scope)
+                log_warning(request_id, _logger, f'Market data query {query} failed due to {e}')
+                raise e
+
+            df = cls._parse_market_data_response(
+                body, query, request_id=request_id, ignore_errors=ignore_errors, start=start, scope=scope
+            )
+            return df
+
+    @classmethod
+    async def get_market_data_async(cls, query, request_id=None, ignore_errors: bool = False) -> pd.DataFrame:
+        with Tracer('GsDataApi.get_market_data_async') as scope:
+            start = time.perf_counter()
+            try:
+                body = await cls._post_with_cache_check_async(
+                    url='/data/measures', validator=cls._validate, payload=query
+                )
+            except Exception as e:
+                tag_error(scope)
+                log_warning(request_id, _logger, f'Market data query {query} failed due to {e}')
+                raise e
+
+            df = cls._parse_market_data_response(
+                body, query, request_id=request_id, ignore_errors=ignore_errors, start=start, scope=scope
+            )
             return df
 
     @classmethod

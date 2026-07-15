@@ -78,6 +78,10 @@ class GsUsersApi:
         return [f"guid:{manager}" for manager in get(GsSession.current.sync.get('/users/self'), 'appManagers', [])]
 
     @classmethod
+    def sync_user(cls, user_id: str) -> Dict[str, Any]:
+        return GsSession.current.sync.get(f'/users/{user_id}/sync')
+
+    @classmethod
     def get_many(cls, key_type: str, keys: List[str], fields: Optional[List[str]] = None) -> dict:
         users_by_key = {}
         chunk_size = 100
